@@ -1,0 +1,9 @@
+{
+    "compilerOptions": {
+        "outDir": "./out",
+        "rootDir": "./src",
+        "sourceMap": true,
+        "module":"ESNext",
+        "target": "es5"
+    }
+}
