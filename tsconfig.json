@@ -1,9 +1,17 @@
 {
-    "compilerOptions": {
+    "bla compilerOptions": {
         "outDir": "./out",
         "rootDir": "./src",
         "sourceMap": true,
-        "module":"ESNext",
+        "module":"ES2020",
         "target": "es5"
-    }
+    },
+
+    "compilerOptions": {
+        "outFile": "./out/game.js",
+        "module": "none",
+        "skipLibCheck": true,
+        "sourceMap": true,
+    },
+    "include": ["**/*.ts"],
 }

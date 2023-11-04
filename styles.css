@@ -24,6 +24,21 @@ http://google.github.io/material-design-icons/#getting-icons
     border: 0px;
 }
 
+.water {
+    fill: rgb(0, 96, 185);
+}
+.toxic {
+    fill: rgb(166, 5, 219);
+}
+.land {
+    fill: rgb(176, 255, 49);
+}
+
+.hover {
+    stroke: rgb(1, 238, 255);
+    stroke-width: 5;
+}
+
 #buildList a span, #resources a {
     margin-left: 5px;
 }

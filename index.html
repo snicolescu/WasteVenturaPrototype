@@ -15,6 +15,8 @@
     crossorigin="anonymous"></script>
 
 <link rel="stylesheet" type="text/css" href="./styles.css" />
+
+<!-- <script type="module" src='./out/game.js'> </script> -->
 <script type='text/javascript' src='./out/game.js'> </script>
 <!-- <script type='text/javascript' src='./buildings.js'> </script>
 <script type='text/javascript' src='./game.js'> </script> -->
@@ -23,7 +25,6 @@
 <head></head>
 
 <body style="background-color: rgb(0, 85, 146)">
-
     <div class="container-fluid">
         <div class="row mt-2">
             <div class="col-2" align="center">
@@ -64,9 +65,15 @@
             </div>
             <div class="col-6" align="center">
                 <div id="metricPreview" class="btn-group mb-1">
-                    <button type="button" class="btn btn-secondary" style="background-color: hsl(300, 100%,30%)" metric="attractiveness">A</button>
-                    <button type="button" class="btn btn-secondary" style="background-color: hsl(51, 82%, 48%)" metric="houses">H</button>
-                    <button type="button" class="btn btn-secondary" style="background-color: rgb(1, 238, 255)" metric="shopping">S</button>
+
+                    <div class="btn-group btn-group-toggle" data-toggle="buttons">
+                        <label class="btn btn-secondary active">
+                            <input type="radio" name="lens" value="None" autocomplete="off" checked style="background-color: hsl(183, 100%, 30%)" onchange="setLens(this)" > Off
+                        </label>
+                        <label class="btn btn-secondary">
+                            <input type="radio" name="lens" value="Height" autocomplete="off" style="background-color: rgb(85, 85, 85)" onchange="setLens(this)"> Height
+                        </label>
+                    </div>
                 </div>
                 <div class="btn-group mb-1">
                     <button id="endturn" type="button" class="btn btn-secondary" disabled>End Turn</button>
@@ -74,15 +81,15 @@
                 <div id="history" class="btn-group mb-1" role="group">
                     <button type="button" class="btn btn-secondary" disabled>Turn History</button>
                 </div>
+                <svg viewBox="-500 -500 1000 1000" class="shadow-lg">
+                    <g id="hexmap" transform="rotate(-30) " fill="white" stroke="black">
+                        <!-- <g transform="translate(50,50)">
+                            <polygon id="clickme" points="100,0 50,-87 -50,-87 -100,-0 -50,87 50,87"></polygon>
+                        </g> -->
+                    </g>
+                </svg>
                 <div id="map" class="shadow-lg">
                     <figure>
-                    <svg >
-                        <g transform="rotate(-30)" fill="white" stroke="black">
-                            <g transform="translate(50,50)">
-                                <polygon id="clickme" points="100,0 50,-87 -50,-87 -100,-0 -50,87 50,87"></polygon>
-                            </g>
-                        </g>
-                    </svg>
                     </figure>
                 </div>
                 <div id="attractiveness" style="display: none">
