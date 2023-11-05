@@ -1,5 +1,64 @@
 /// <reference path="./hex.ts" />
 
+
+enum Lens {
+    None,
+    Height
+}
+
+let lens = Lens.None;
+
+function createLineElement(x1: number, y1: number, x2: number, y2: number) {
+    var lineElement = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    lineElement.setAttribute("x1", x1.toString());
+    lineElement.setAttribute("y1", y1.toString());
+    lineElement.setAttribute("x2", x2.toString());
+    lineElement.setAttribute("y2", y2.toString());
+    lineElement.setAttribute("stroke", "black");
+    lineElement.setAttribute("stroke-width", "5");
+    return lineElement;
+}
+
+
+function rgbToHex(r: number, g: number, b: number) {
+    return `#${((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1)}`;
+}
+
+function setTileGfx( element : Element, tile : TileData)
+{
+    switch (lens) {
+        case Lens.Height:
+            element.removeAttribute("class");
+            element.setAttribute("fill", rgbToHex(tile.height * 50, tile.height * 50, tile.height * 50));
+            break;
+        case Lens.None:
+            element.removeAttribute("fill");
+
+            // type-specific style
+            if (tile.toxicity > 0) {
+                element.setAttribute("class", "toxic");
+            } else if (tile.water > 0) {
+                element.setAttribute("class", "water");
+            } else {
+                element.setAttribute("class", "land");
+            }
+
+            break;
+    }
+}
+
+function setLens( button: HTMLInputElement)
+{
+    Object.keys(Lens).forEach( key => { if (button.value == key) { lens = Lens[key]; } });
+
+    hexmap.refreshGfx();
+}
+
+function idx( q : number, r: number) : number
+{
+    return q + r * 1000;
+}
+
 class TileData
 {
     public height : number = 0;
@@ -27,52 +86,6 @@ class TileData
         tile.height = Math.floor(Math.random() * 5);
         return tile;
     }
-}
-
-
-function rgbToHex(r: number, g: number, b: number) {
-    return `#${((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1)}`;
-}
-
-enum Lens {
-    None,
-    Height
-}
-let lens = Lens.None;
-
-function setLens( button: HTMLInputElement)
-{
-    Object.keys(Lens).forEach( key => { if (button.value == key) { lens = Lens[key]; } });
-
-    hexmap.refreshGfx();
-}
-
-function setTileGfx( element : Element, tile : TileData)
-{
-    switch (lens) {
-        case Lens.Height:
-            element.removeAttribute("class");
-            element.setAttribute("fill", rgbToHex(tile.height * 50, tile.height * 50, tile.height * 50));
-            break;
-        case Lens.None:
-            element.removeAttribute("fill");
-
-            // type-specific style
-            if (tile.toxicity > 0) {
-                element.setAttribute("class", "toxic");
-            } else if (tile.water > 0) {
-                element.setAttribute("class", "water");
-            } else {
-                element.setAttribute("class", "land");
-            }
-
-            break;
-    }
-}
-
-function idx( q : number, r: number) : number
-{
-    return q + r * 1000;
 }
 
 class HexMap
@@ -122,7 +135,17 @@ class HexMap
 
         const newElement = document.createElementNS("http://www.w3.org/2000/svg", "g");
         const polygon = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
-        polygon.setAttribute("points", "100,0 50,-87 -50,-87 -100,-0 -50,87 50,87");
+        // polygon.setAttribute("points", "100,0 50,-87 -50,-87 -100,-0 -50,87 50,87");
+        polygon.setAttribute("points", "90,0 45,-78.3 -45,-78.3 -90,-0 -45,78.3 45,78.3");
+        //polygon.setAttribute("points", "95,0 47.5,-82.65 -47.5,-82.65 -95,-0 -47.5,82.65 47.5,82.65");
+        
+        const lineElement1 = createLineElement(100,0,50,-87);
+        const lineElement2 = createLineElement(-50,-87,-100,-0);
+        const lineElement3 = createLineElement(-50,87,50,87);
+        newElement.appendChild(lineElement1);
+        newElement.appendChild(lineElement2);
+        newElement.appendChild(lineElement3);
+
         newElement.setAttribute("transform", `translate(${p.x},${p.y})`);
         newElement.appendChild(polygon);
         newElement.onclick = () => { this.onHexClicked(q,r); };

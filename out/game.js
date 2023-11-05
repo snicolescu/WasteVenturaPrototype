@@ -188,6 +188,55 @@ var Layout = /** @class */ (function () {
     return Layout;
 }());
 /// <reference path="./hex.ts" />
+var Lens;
+(function (Lens) {
+    Lens[Lens["None"] = 0] = "None";
+    Lens[Lens["Height"] = 1] = "Height";
+})(Lens || (Lens = {}));
+var lens = Lens.None;
+function createLineElement(x1, y1, x2, y2) {
+    var lineElement = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    lineElement.setAttribute("x1", x1.toString());
+    lineElement.setAttribute("y1", y1.toString());
+    lineElement.setAttribute("x2", x2.toString());
+    lineElement.setAttribute("y2", y2.toString());
+    lineElement.setAttribute("stroke", "black");
+    lineElement.setAttribute("stroke-width", "5");
+    return lineElement;
+}
+function rgbToHex(r, g, b) {
+    return "#".concat(((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1));
+}
+function setTileGfx(element, tile) {
+    switch (lens) {
+        case Lens.Height:
+            element.removeAttribute("class");
+            element.setAttribute("fill", rgbToHex(tile.height * 50, tile.height * 50, tile.height * 50));
+            break;
+        case Lens.None:
+            element.removeAttribute("fill");
+            // type-specific style
+            if (tile.toxicity > 0) {
+                element.setAttribute("class", "toxic");
+            }
+            else if (tile.water > 0) {
+                element.setAttribute("class", "water");
+            }
+            else {
+                element.setAttribute("class", "land");
+            }
+            break;
+    }
+}
+function setLens(button) {
+    Object.keys(Lens).forEach(function (key) { if (button.value == key) {
+        lens = Lens[key];
+    } });
+    hexmap.refreshGfx();
+}
+function idx(q, r) {
+    return q + r * 1000;
+}
 var TileData = /** @class */ (function () {
     function TileData() {
         this.height = 0;
@@ -212,45 +261,6 @@ var TileData = /** @class */ (function () {
     };
     return TileData;
 }());
-function rgbToHex(r, g, b) {
-    return "#" + ((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1);
-}
-var Lens;
-(function (Lens) {
-    Lens[Lens["None"] = 0] = "None";
-    Lens[Lens["Height"] = 1] = "Height";
-})(Lens || (Lens = {}));
-var lens = Lens.None;
-function setLens(button) {
-    Object.keys(Lens).forEach(function (key) { if (button.value == key) {
-        lens = Lens[key];
-    } });
-    hexmap.refreshGfx();
-}
-function setTileGfx(element, tile) {
-    switch (lens) {
-        case Lens.Height:
-            element.removeAttribute("class");
-            element.setAttribute("fill", rgbToHex(tile.height * 50, tile.height * 50, tile.height * 50));
-            break;
-        case Lens.None:
-            element.removeAttribute("fill");
-            // type-specific style
-            if (tile.toxicity > 0) {
-                element.setAttribute("class", "toxic");
-            }
-            else if (tile.water > 0) {
-                element.setAttribute("class", "water");
-            }
-            else {
-                element.setAttribute("class", "land");
-            }
-            break;
-    }
-}
-function idx(q, r) {
-    return q + r * 1000;
-}
 var HexMap = /** @class */ (function () {
     function HexMap() {
         this.tiles = {};
@@ -270,7 +280,7 @@ var HexMap = /** @class */ (function () {
         this.setCamera(0, 0, 0.5);
     };
     HexMap.prototype.setCamera = function (q, y, scale) {
-        this.mapHtml.setAttribute("transform", "rotate(30) translate(" + q + "," + y + ") scale(" + scale + ")");
+        this.mapHtml.setAttribute("transform", "rotate(30) translate(".concat(q, ",").concat(y, ") scale(").concat(scale, ")"));
     };
     HexMap.prototype.getRandomIndex = function () {
         var keys = Object.keys(this.tiles);
@@ -282,8 +292,16 @@ var HexMap = /** @class */ (function () {
         var p = this.layout.getPixel(q, r);
         var newElement = document.createElementNS("http://www.w3.org/2000/svg", "g");
         var polygon = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
-        polygon.setAttribute("points", "100,0 50,-87 -50,-87 -100,-0 -50,87 50,87");
-        newElement.setAttribute("transform", "translate(" + p.x + "," + p.y + ")");
+        // polygon.setAttribute("points", "100,0 50,-87 -50,-87 -100,-0 -50,87 50,87");
+        polygon.setAttribute("points", "90,0 45,-78.3 -45,-78.3 -90,-0 -45,78.3 45,78.3");
+        //polygon.setAttribute("points", "95,0 47.5,-82.65 -47.5,-82.65 -95,-0 -47.5,82.65 47.5,82.65");
+        var lineElement1 = createLineElement(100, 0, 50, -87);
+        var lineElement2 = createLineElement(-50, -87, -100, -0);
+        var lineElement3 = createLineElement(-50, 87, 50, 87);
+        newElement.appendChild(lineElement1);
+        newElement.appendChild(lineElement2);
+        newElement.appendChild(lineElement3);
+        newElement.setAttribute("transform", "translate(".concat(p.x, ",").concat(p.y, ")"));
         newElement.appendChild(polygon);
         newElement.onclick = function () { _this.onHexClicked(q, r); };
         newElement.onmouseenter = function () { newElement.classList.add("hover"); };
