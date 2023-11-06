@@ -5,8 +5,6 @@ class Point
     constructor (public x:number, public y:number) {}
 }
 
-function Pt(x : number, y : number) : Point { return new Point(x, y); };
-
 class Hex
 {
     constructor (public q:number, public r:number) {
@@ -21,7 +19,6 @@ class Hex
     {
         return new Hex(this.q - b.q, this.r - b.r);
     }
-
 
     public scale(k:number):Hex
     {
@@ -49,7 +46,6 @@ class Hex
         return Hex.directions[direction];
     }
 
-
     public neighbor(direction:number):Hex
     {
         return this.add(Hex.direction(direction));
@@ -68,7 +64,6 @@ class Hex
         let s = -this.q - this.r;
         return (Math.abs(this.q) + Math.abs(this.r) + Math.abs(s)) / 2;
     }
-
 
     public distance(b:Hex):number
     {

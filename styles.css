@@ -24,21 +24,6 @@ http://google.github.io/material-design-icons/#getting-icons
     border: 0px;
 }
 
-.water {
-    fill: rgb(0, 96, 185);
-}
-.toxic {
-    fill: rgb(166, 5, 219);
-}
-.land {
-    fill: rgb(176, 255, 49);
-}
-
-.hover {
-    stroke: rgb(1, 238, 255);
-    stroke-width: 5;
-}
-
 #buildList a span, #resources a {
     margin-left: 5px;
 }
@@ -104,26 +89,6 @@ http://google.github.io/material-design-icons/#getting-icons
 .townhall {
     background-image: linear-gradient(to bottom,rgb(255, 136, 1),rgb(209, 129, 25));
 }
-.bungalow {
-    background-image: linear-gradient(to bottom,rgb(255, 196, 1),rgb(209, 166, 25));
-}
-.house {
-    background-image: linear-gradient(to bottom, rgb(252, 214, 112),rgb(253, 214, 57));
-}
-.store {
-    background-image: linear-gradient(to bottom,rgb(1, 238, 255),rgb(0, 159, 170));
-}
-
-.road {
-    background-color: rgb(141, 140, 140);
-}
-.reserve {
-    background-color: rgb(51, 100, 5);
-}
-.water {
-    /* background-image: linear-gradient(to bottom,rgb(1, 99, 228) 0,rgb(21, 74, 143) 100%); */
-    background-image: linear-gradient(to bottom,rgb(49, 129, 235) 0,rgb(61, 89, 126) 100%);
-}
 
 /* Tile UI */
 #map .valid {
@@ -136,4 +101,31 @@ http://google.github.io/material-design-icons/#getting-icons
     border: 3px solid; 
     border-color: #ad0303;
     line-height: 26px;
+}
+
+/* Waste ventura stuff */
+
+.water {
+    fill: rgb(0, 96, 185);
+}
+.toxic {
+    fill: rgb(166, 5, 219);
+}
+.land {
+    fill: rgb(176, 255, 49);
+}
+
+.hover {
+    stroke: rgb(1, 238, 255);
+    stroke-width: 5;
+}
+
+.debugText {
+    font-size: 20px;
+    font-family: monospace;
+    fill: black;
+    stroke: black;
+    stroke-width: 0.5px;
+    text-anchor: middle;
+    pointer-events: none; /* CRB: makes it unhoverable */
 }
