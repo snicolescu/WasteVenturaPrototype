@@ -22,7 +22,10 @@ function Pt(x : number, y : number) : Point { return new Point(x, y); };
 // ! Careful, it has 7 points, the first and last are the same so we don't have to modulo when adding lines
 const hexPoints = [ Pt(50,87), Pt(100,0), Pt(50,-87), Pt(-50,-87), Pt(-100,-0), Pt(-50,87), Pt(50,87)];
 const fullHexString = "50,87 100,0 50,-87 -50,-87 -100,-0 -50,87";
-const smallHexString = "45,78.3 90,-0 45,-78.3 -45,-78.3 -90,-0 -45,78.3";
+// const smallHexString = "40,69.6 80,-0 40,-69.6 -40,-69.6 -80,-0 -40,69.6"; // 80% of the full size
+const smallHexString = "42.5,73.95 85,0 42.5,-73.95 -42.5,-73.95 -85,-0 -42.5,73.95"; // 85% of the full size
+// const smallHexString = "45,78.3 90,-0 45,-78.3 -45,-78.3 -90,-0 -45,78.3"; // 90% of the full size
+
 
 class Line {
     constructor( public q:number, public r:number, public dir:number) { }
@@ -138,8 +141,25 @@ function createLineElement(x1: number, y1: number, x2: number, y2: number) {
     lineElement.setAttribute("y1", y1.toString());
     lineElement.setAttribute("x2", x2.toString());
     lineElement.setAttribute("y2", y2.toString());
-    lineElement.setAttribute("stroke", "black");
-    lineElement.setAttribute("stroke-width", "5");
+    lineElement.setAttribute("stroke-width", "18");
+    lineElement.setAttribute("stroke-linecap", "round");
+
+    // Get the length of the line
+    const length = Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
+
+    // Calculate the new start and end points
+    const offset = 20;
+    const newStartX = x1 + (offset / length) * (x2 - x1);
+    const newStartY = y1 + (offset / length) * (y2 - y1);
+    const newEndX = x2 - (offset / length) * (x2 - x1);
+    const newEndY = y2 - (offset / length) * (y2 - y1);
+
+    // Set the new start and end points
+    lineElement.setAttribute("x1", newStartX.toString());
+    lineElement.setAttribute("y1", newStartY.toString());
+    lineElement.setAttribute("x2", newEndX.toString());
+    lineElement.setAttribute("y2", newEndY.toString());
+
     return lineElement;
 }
 
@@ -167,7 +187,6 @@ function clearTempElements() {
     tempElements.forEach( e => e.remove());
     tempElements = [];
 }
-
 
 function setTileGfx( element : Element, tile : TileData)
 {
@@ -199,6 +218,11 @@ function setLineGfx( element : Element, line : LineData)
 
 function setCornerGfx( element : Element, corner : CornerData)
 {
+
+}
+
+function onSelectHex( hex: Hex) {
+    hexmap.tileElements[hexKey(hex.q, hex.r)].classList.add("selected");
 
 }
 
@@ -314,7 +338,7 @@ class HexMap
     public layout : Layout;
     public mapHtml: Element;
     public mapRadius: number = 5;
-    
+
     public tiles : { [key: number]: TileData; } = { };
     public tileElements : { [key: number]: Element; } = { };
     public lines : { [key: number]: LineData; } = { };
@@ -349,6 +373,15 @@ class HexMap
     isHexInMap( q:number, r:number) : boolean
     {
         return ((Math.abs(q) + Math.abs(r) + Math.abs(-q-r)) / 2) <= this.mapRadius; //hex.len() <= this.mapRadius;
+    }
+
+    unselectHex() {
+        this.mapHtml.querySelectorAll(".selected").forEach( e => e.classList.remove("selected"));
+    }
+
+    selectHex( q:number, r:number) {
+        this.unselectHex();
+        this.tileElements[hexKey(q,r)].classList.add("selected");
     }
 
     setCamera( q:number, y:number, scale:number)
@@ -443,18 +476,24 @@ class Game
     }
 
     clicks : number;
-    scoreElement : Element;
-    
-    init() {
-        this.scoreElement = document.getElementById("score");
+    selectedTypeElement : Element;
+    slectedPositionElement : Element;
+    selectedHeightElement : Element;
+    selectedWaterElement : Element;
+    selectedToxicityElement : Element;
 
-        this.scoreElement.textContent = "Score:" + this.clicks;
+    init() {
+        this.selectedTypeElement = document.getElementById("selected_type");
+        this.slectedPositionElement = document.getElementById("selected_position");
+        this.selectedHeightElement = document.getElementById("selected_height");
+        this.selectedWaterElement = document.getElementById("selected_water");
+        this.selectedToxicityElement = document.getElementById("selected_toxicity");
     }
 
     clicked( q:number, r:number) {
         this.clicks++;
 
-        this.scoreElement.textContent = "Score:" + this.clicks;
+        this.selectedTypeElement.textContent = "Score:" + this.clicks;
 
         console.log("Clicked ", q, r);
     }
@@ -462,6 +501,7 @@ class Game
 
 let game = new Game;
 let hexmap = new HexMap;
+var selectedTile:number[] = [0,0]; // Need to remember selected tile
 
 window.onload = function () {
     console.log("Loaded");
@@ -470,10 +510,29 @@ window.onload = function () {
     hexmap.init();
     game.init();
     hexmap.onHexClicked = (q:number, r:number) => { 
-        game.clicked(q,r);
+        selectedTile = [q ,r];
+        hexmap.selectHex(q,r);
 
-        game.scoreElement.textContent = "Height:" + hexmap.tiles[hexKey(q,r)].height;
+        game.selectedTypeElement.textContent = "Type: Hex" 
+        game.slectedPositionElement.textContent = "Position: " + q + "," + r + ",";
+        game.selectedHeightElement.textContent = "Height: " + hexmap.tiles[hexKey(q,r)].height;
+        game.selectedWaterElement.textContent = "Water: " + hexmap.tiles[hexKey(q,r)].water;
+        game.selectedToxicityElement.textContent = "Toxicity: " + hexmap.tiles[hexKey(q,r)].toxicity;
     };
-    hexmap.onLineClicked = (q:number, r:number, dir:number) => { game.scoreElement.textContent = "Line:" + q + "," + r + "," + dir; };
-    hexmap.onCornerClicked = (q:number, r:number, dir:number) => { game.scoreElement.textContent = "Corner:" + q + "," + r + "," + dir; };
+
+    hexmap.onLineClicked = (q:number, r:number, dir:number) => {
+    game.selectedTypeElement.textContent = "Type: Edge" 
+    game.slectedPositionElement.textContent = "Position: " + q + "," + r + "," + dir;
+    game.selectedHeightElement.textContent = "";
+    game.selectedWaterElement.textContent = "";
+    game.selectedToxicityElement.textContent = "";
+    };
+
+    hexmap.onCornerClicked = (q:number, r:number, dir:number) => {
+    game.selectedTypeElement.textContent = "Type: Point" 
+    game.slectedPositionElement.textContent = "Position: " + q + "," + r + "," + dir;
+    game.selectedHeightElement.textContent = "";
+    game.selectedWaterElement.textContent = "";
+    game.selectedToxicityElement.textContent = "";
+    };
 }
