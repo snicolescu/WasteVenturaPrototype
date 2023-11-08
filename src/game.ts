@@ -277,6 +277,7 @@ function onLineHovered(line: Line) {
         hexmap.mapHtml.appendChild(neighbourTextElement);
         tempElements.push(neighbourTextElement);
     });
+    hexmap.lineElements[lineKey(line.q, line.r, line.dir)].classList.add("line_hover");
 }
 
 function onCornerHovered(corner: Corner) {
@@ -291,6 +292,7 @@ function onCornerHovered(corner: Corner) {
         hexmap.mapHtml.appendChild(neighbourTextElement);
         tempElements.push(neighbourTextElement);
     });
+    hexmap.pointElements[lineKey(corner.q, corner.r, corner.dir)].classList.add("point_hover");
 }
 
 
@@ -419,6 +421,7 @@ class HexMap
                 let lineElement = createLineElement( hexPoints[lineNum].x, hexPoints[lineNum].y, hexPoints[lineNum + 1].x, hexPoints[lineNum + 1].y);
                 lineElement.onclick = () => { this.onLineClicked(q,r,lineNum); };
                 lineElement.onmouseenter = () => { onLineHovered( line); };
+                lineElement.onmouseleave = () => { lineElement.classList.remove("line_hover") };
                 newElement.appendChild(lineElement);
 
                 // game logic data
@@ -444,6 +447,7 @@ class HexMap
             let pointElement = createCircleElement( hexPoints[cornerNum].x, hexPoints[cornerNum].y, 10);
             pointElement.onclick = () => { this.onCornerClicked(q,r,cornerNum); };
             pointElement.onmouseenter = () => { onCornerHovered( corner); };
+            pointElement.onmouseleave = () => { pointElement.classList.remove("point_hover") };
             newElement.appendChild(pointElement);
             
             // game logic data
@@ -465,6 +469,55 @@ class HexMap
             let tile = this.tiles[key];
             let element = this.tileElements[key];
             setTileGfx( element, tile);
+        }
+    }
+}
+
+class Citizen
+{
+    constructor() {
+        this.name = "ph_name";
+        this.assignedTile = null;
+        this.status = false;
+    }
+    name: string;
+    assignedTile: number[];
+    status: boolean;
+}
+
+class CitizensList
+{
+    constructor() {
+        this.citizens = [];
+        this.citizenNames = ["Cerbu", "Ioan", "Iulia", "Edi", "Silvia", "Sick", "Adi", "Andu", "Mihai", "Dan", "Vlad"];
+        this.table = document.getElementById("citizens_table") as HTMLTableElement;
+        // this.rows = this.table.getElementsByTagName("tr"); // It doesn't work sadly, , there is an error when trying to get the rows
+    }
+   
+    citizens: Citizen[];
+    citizenNames: string[];
+    table: HTMLElement;
+    rows: HTMLCollectionOf<HTMLTableRowElement>;
+    
+    addCitizen() {
+        this.citizens.push(new Citizen);
+    }
+
+    removeCitizen() {
+        this.citizens.pop();
+    }
+
+    populateWithRandomCitizens() {
+        for (let i = 0; i < 10; i++) {
+            let citizen = new Citizen;
+            citizen.name = this.citizenNames[Math.floor(Math.random() * this.citizenNames.length)];
+            this.addCitizen();
+        }
+    }
+
+    clearTable() {
+        for (let i = this.rows.length - 1; i > 0; i--) {
+            this.table.deleteRow(i);
         }
     }
 }
@@ -501,7 +554,12 @@ class Game
 
 let game = new Game;
 let hexmap = new HexMap;
+let citizensList = new CitizensList; // Doesn't work sadly yet, there is an error when trying to get the rows
+// citizensList.populateWithRandomCitizens();
+// citizensList.clearTable();
+
 var selectedTile:number[] = [0,0]; // Need to remember selected tile
+
 
 window.onload = function () {
     console.log("Loaded");

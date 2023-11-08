@@ -120,6 +120,16 @@ http://google.github.io/material-design-icons/#getting-icons
     stroke-width: 5;
 }
 
+.line_hover{
+    stroke: rgb(1, 238, 255);
+    stroke-width: 15;
+}
+
+.point_hover{
+    stroke: rgb(1, 238, 255);
+    stroke-width: 5;
+}
+
 .selected{
     stroke: rgb(255, 255, 255);
     stroke-width: 4;
@@ -136,10 +146,7 @@ http://google.github.io/material-design-icons/#getting-icons
     text-anchor: middle;
     pointer-events: none; /* CRB: makes it unhoverable */
 }
-    stroke: rgb(81, 107, 109);
-    stroke-width: 3;
-}
-
+    
 .debugText {
     font-size: 20px;
     font-family: monospace;

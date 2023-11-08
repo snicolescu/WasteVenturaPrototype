@@ -418,6 +418,7 @@ function onLineHovered(line) {
         hexmap.mapHtml.appendChild(neighbourTextElement);
         tempElements.push(neighbourTextElement);
     });
+    hexmap.lineElements[lineKey(line.q, line.r, line.dir)].classList.add("line_hover");
 }
 function onCornerHovered(corner) {
     clearTempElements();
@@ -430,6 +431,7 @@ function onCornerHovered(corner) {
         hexmap.mapHtml.appendChild(neighbourTextElement);
         tempElements.push(neighbourTextElement);
     });
+    hexmap.pointElements[lineKey(corner.q, corner.r, corner.dir)].classList.add("point_hover");
 }
 var TileData = /** @class */ (function () {
     function TileData() {
@@ -521,15 +523,16 @@ var HexMap = /** @class */ (function () {
         var _loop_1 = function (lineNum) {
             var line = hexLines[lineNum];
             if (lineNum < 3 || !this_1.isHexInMap(line.q, line.r)) {
-                var lineElement = createLineElement(hexPoints[lineNum].x, hexPoints[lineNum].y, hexPoints[lineNum + 1].x, hexPoints[lineNum + 1].y);
-                lineElement.onclick = function () { _this.onLineClicked(q, r, lineNum); };
-                lineElement.onmouseenter = function () { onLineHovered(line); };
-                newElement.appendChild(lineElement);
+                var lineElement_1 = createLineElement(hexPoints[lineNum].x, hexPoints[lineNum].y, hexPoints[lineNum + 1].x, hexPoints[lineNum + 1].y);
+                lineElement_1.onclick = function () { _this.onLineClicked(q, r, lineNum); };
+                lineElement_1.onmouseenter = function () { onLineHovered(line); };
+                lineElement_1.onmouseleave = function () { lineElement_1.classList.remove("line_hover"); };
+                newElement.appendChild(lineElement_1);
                 // game logic data
                 var lineData = new LineData();
                 this_1.lines[lineKey(q, r, lineNum)] = lineData;
-                setLineGfx(lineElement, lineData);
-                this_1.lineElements[lineKey(q, r, lineNum)] = lineElement;
+                setLineGfx(lineElement_1, lineData);
+                this_1.lineElements[lineKey(q, r, lineNum)] = lineElement_1;
             }
         };
         var this_1 = this;
@@ -551,6 +554,7 @@ var HexMap = /** @class */ (function () {
             var pointElement = createCircleElement(hexPoints[cornerNum].x, hexPoints[cornerNum].y, 10);
             pointElement.onclick = function () { _this.onCornerClicked(q, r, cornerNum); };
             pointElement.onmouseenter = function () { onCornerHovered(corner); };
+            pointElement.onmouseleave = function () { pointElement.classList.remove("point_hover"); };
             newElement.appendChild(pointElement);
             // game logic data
             var cornerData = new CornerData();
@@ -577,6 +581,41 @@ var HexMap = /** @class */ (function () {
     };
     return HexMap;
 }());
+var Citizen = /** @class */ (function () {
+    function Citizen() {
+        this.name = "ph_name";
+        this.assignedTile = null;
+        this.status = false;
+    }
+    return Citizen;
+}());
+var CitizensList = /** @class */ (function () {
+    function CitizensList() {
+        this.citizens = [];
+        this.citizenNames = ["Cerbu", "Ioan", "Iulia", "Edi", "Silvia", "Sick", "Adi", "Andu", "Mihai", "Dan", "Vlad"];
+        this.table = document.getElementById("citizens_table");
+        // this.rows = this.table.getElementsByTagName("tr"); // It doesn't work sadly
+    }
+    CitizensList.prototype.addCitizen = function () {
+        this.citizens.push(new Citizen);
+    };
+    CitizensList.prototype.removeCitizen = function () {
+        this.citizens.pop();
+    };
+    CitizensList.prototype.populateWithRandomCitizens = function () {
+        for (var i = 0; i < 10; i++) {
+            var citizen = new Citizen;
+            citizen.name = this.citizenNames[Math.floor(Math.random() * this.citizenNames.length)];
+            this.addCitizen();
+        }
+    };
+    CitizensList.prototype.clearTable = function () {
+        for (var i = this.rows.length - 1; i > 0; i--) {
+            this.table.deleteRow(i);
+        }
+    };
+    return CitizensList;
+}());
 var Game = /** @class */ (function () {
     function Game() {
         this.clicks = 0;
@@ -597,6 +636,9 @@ var Game = /** @class */ (function () {
 }());
 var game = new Game;
 var hexmap = new HexMap;
+var citizensList = new CitizensList;
+// citizensList.populateWithRandomCitizens();
+// citizensList.clearTable();
 var selectedTile = [0, 0]; // Need to remember selected tile
 window.onload = function () {
     console.log("Loaded");
