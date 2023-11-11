@@ -146,13 +146,9 @@ http://google.github.io/material-design-icons/#getting-icons
     text-anchor: middle;
     pointer-events: none; /* CRB: makes it unhoverable */
 }
-    
-.debugText {
-    font-size: 20px;
-    font-family: monospace;
-    fill: black;
-    stroke: black;
-    stroke-width: 0.5px;
-    text-anchor: middle;
-    pointer-events: none; /* CRB: makes it unhoverable */
+
+#metricPreview {
+    position: absolute;
+    padding:0.75rem;
+    z-index: 1;
 }

@@ -277,6 +277,7 @@ function onLineHovered(line: Line) {
         hexmap.mapHtml.appendChild(neighbourTextElement);
         tempElements.push(neighbourTextElement);
     });
+    //BUG: Getting error hovering over edge lines
     hexmap.lineElements[lineKey(line.q, line.r, line.dir)].classList.add("line_hover");
 }
 
@@ -496,7 +497,7 @@ class CitizensList
    
     citizens: Citizen[];
     citizenNames: string[];
-    table: HTMLElement;
+    table: HTMLTableElement;
     rows: HTMLCollectionOf<HTMLTableRowElement>;
     
     addCitizen() {

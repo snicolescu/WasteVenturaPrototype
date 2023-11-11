@@ -296,7 +296,7 @@ var debugHexes = true;
 //    return dictionary[keys[index]];
 //}
 function rgbToHexa(r, g, b) {
-    return "#".concat(((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1));
+    return "#" + ((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1);
 }
 // SVG helpers
 function createSmallHexElement() {
@@ -379,15 +379,15 @@ function onHexHovered(hex) {
     clearTempElements();
     if (debugHexes) {
         var tile = hexmap.tiles[hexKey(hex.q, hex.r)];
-        var text = "(".concat(hex.q, ",").concat(hex.r, ")");
+        var text = "(" + hex.q + "," + hex.r + ")";
         if (tile.height > 0) {
-            text += " h:".concat(tile.height);
+            text += " h:" + tile.height;
         }
         if (tile.water > 0) {
-            text += " w:".concat(tile.water);
+            text += " w:" + tile.water;
         }
         if (tile.toxicity > 0) {
-            text += " t:".concat(tile.toxicity);
+            text += " t:" + tile.toxicity;
         }
         var p = hexmap.layout.getPixel(hex.q, hex.r);
         var textElement = createTextElement(p.x, p.y, text);
@@ -398,7 +398,7 @@ function onHexHovered(hex) {
     // number the neighbours
     for (var dir = 0; dir < 6; dir++) {
         var neighbour = hex.neighbor(dir);
-        var neighbourText = "".concat(dir);
+        var neighbourText = "" + dir;
         var neighbourP = hexmap.layout.getPixel(neighbour.q, neighbour.r);
         var neighbourTextElement = createTextElement(neighbourP.x, neighbourP.y, neighbourText);
         neighbourTextElement.setAttribute("class", "debugText");
@@ -411,20 +411,21 @@ function onLineHovered(line) {
     clearTempElements();
     // number the neighbours
     getLineHexes(line).forEach(function (hex, index) {
-        var neighbourText = "".concat(index);
+        var neighbourText = "" + index;
         var neighbourP = hexmap.layout.getPixel(hex.q, hex.r);
         var neighbourTextElement = createTextElement(neighbourP.x, neighbourP.y, neighbourText);
         neighbourTextElement.setAttribute("class", "debugText");
         hexmap.mapHtml.appendChild(neighbourTextElement);
         tempElements.push(neighbourTextElement);
     });
+    //BUG: Getting error hovering over edge lines
     hexmap.lineElements[lineKey(line.q, line.r, line.dir)].classList.add("line_hover");
 }
 function onCornerHovered(corner) {
     clearTempElements();
     // number the neighbours
     getCornerHexes(corner).forEach(function (hex, index) {
-        var neighbourText = "".concat(index);
+        var neighbourText = "" + index;
         var neighbourP = hexmap.layout.getPixel(hex.q, hex.r);
         var neighbourTextElement = createTextElement(neighbourP.x, neighbourP.y, neighbourText);
         neighbourTextElement.setAttribute("class", "debugText");
@@ -500,7 +501,7 @@ var HexMap = /** @class */ (function () {
         this.tileElements[hexKey(q, r)].classList.add("selected");
     };
     HexMap.prototype.setCamera = function (q, y, scale) {
-        this.mapHtml.setAttribute("transform", "translate(".concat(q, ",").concat(y, ") scale(").concat(scale, ")"));
+        this.mapHtml.setAttribute("transform", "translate(" + q + "," + y + ") scale(" + scale + ")");
     };
     HexMap.prototype.addHexElement = function (q, r) {
         var _this = this;
@@ -568,7 +569,7 @@ var HexMap = /** @class */ (function () {
             _loop_2(cornerNum);
         }
         // move everything toghether
-        newElement.setAttribute("transform", "translate(".concat(p.x, ",").concat(p.y, ")"));
+        newElement.setAttribute("transform", "translate(" + p.x + "," + p.y + ")");
         this.mapHtml.appendChild(newElement);
         return newElement;
     };
@@ -594,7 +595,7 @@ var CitizensList = /** @class */ (function () {
         this.citizens = [];
         this.citizenNames = ["Cerbu", "Ioan", "Iulia", "Edi", "Silvia", "Sick", "Adi", "Andu", "Mihai", "Dan", "Vlad"];
         this.table = document.getElementById("citizens_table");
-        // this.rows = this.table.getElementsByTagName("tr"); // It doesn't work sadly
+        // this.rows = this.table.getElementsByTagName("tr"); // It doesn't work sadly, , there is an error when trying to get the rows
     }
     CitizensList.prototype.addCitizen = function () {
         this.citizens.push(new Citizen);
@@ -636,7 +637,7 @@ var Game = /** @class */ (function () {
 }());
 var game = new Game;
 var hexmap = new HexMap;
-var citizensList = new CitizensList;
+var citizensList = new CitizensList; // Doesn't work sadly yet, there is an error when trying to get the rows
 // citizensList.populateWithRandomCitizens();
 // citizensList.clearTable();
 var selectedTile = [0, 0]; // Need to remember selected tile
