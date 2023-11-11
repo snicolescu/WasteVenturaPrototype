@@ -199,6 +199,8 @@ UI
 - add a minimap that moves the map around
 
 */
+// Game Data
+var citizenNames = ["Cerbu", "Ioan", "Iulia", "Edi", "Silvia", "Sick", "Adi", "Andu", "Mihai", "Dan", "Vlad"];
 // Hex, Line & Point helpers
 function Pt(x, y) { return new Point(x, y); }
 ;
@@ -586,33 +588,46 @@ var Citizen = /** @class */ (function () {
     function Citizen() {
         this.name = "ph_name";
         this.assignedTile = null;
-        this.status = false;
+        this.status = true;
     }
     return Citizen;
 }());
 var CitizensList = /** @class */ (function () {
     function CitizensList() {
         this.citizens = [];
-        this.citizenNames = ["Cerbu", "Ioan", "Iulia", "Edi", "Silvia", "Sick", "Adi", "Andu", "Mihai", "Dan", "Vlad"];
-        this.table = document.getElementById("citizens_table");
-        // this.rows = this.table.getElementsByTagName("tr"); // It doesn't work sadly, , there is an error when trying to get the rows
+        //CRB: This doesn't work because it's called in the constructor, but the html hasn't finished loading. Need to wait for onload
+        //this.table = document.getElementById("citizens_table") as HTMLTableElement;
     }
-    CitizensList.prototype.addCitizen = function () {
-        this.citizens.push(new Citizen);
+    CitizensList.prototype.initUI = function () {
+        this.table = document.getElementById("citizens_table");
+        this.rows = this.table.rows;
     };
-    CitizensList.prototype.removeCitizen = function () {
-        this.citizens.pop();
+    CitizensList.prototype.loadCitizens = function (citizens) {
+        this.citizens = citizens;
     };
     CitizensList.prototype.populateWithRandomCitizens = function () {
+        this.citizens = [];
         for (var i = 0; i < 10; i++) {
             var citizen = new Citizen;
-            citizen.name = this.citizenNames[Math.floor(Math.random() * this.citizenNames.length)];
-            this.addCitizen();
+            citizen.name = citizenNames[Math.floor(Math.random() * citizenNames.length)];
+            this.citizens.push(citizen);
         }
     };
-    CitizensList.prototype.clearTable = function () {
-        for (var i = this.rows.length - 1; i > 0; i--) {
-            this.table.deleteRow(i);
+    CitizensList.prototype.refreshGfx = function () {
+        // clearTable
+        for (var i = 0; i < this.citizens.length; i++) {
+            this.table.deleteRow(-1);
+        }
+        // fill it based on citizens
+        for (var i = 0; i < this.citizens.length; i++) {
+            var citizen = this.citizens[i];
+            var row = this.table.insertRow(-1);
+            var cell1 = row.insertCell(0);
+            var cell2 = row.insertCell(1);
+            var cell3 = row.insertCell(2);
+            cell1.innerHTML = citizen.name;
+            cell2.innerHTML = citizen.assignedTile ? citizen.assignedTile[0] + "," + citizen.assignedTile[1] : "Idle";
+            cell3.innerHTML = citizen.status ? "Alive" : "Dead";
         }
     };
     return CitizensList;
@@ -621,12 +636,47 @@ var Game = /** @class */ (function () {
     function Game() {
         this.clicks = 0;
     }
+    Game.prototype.resetState = function () {
+        localStorage.clear();
+        this.loadState();
+    };
+    Game.prototype.loadState = function () {
+        var saveName = "save1";
+        var saveString = localStorage.getItem(saveName);
+        if (saveString === null) {
+            console.log("No saved data found. Generating new random one.");
+            citizensList.populateWithRandomCitizens();
+        }
+        else {
+            var saveJson = JSON.parse(saveString);
+            console.log("Loaded saved data from " + saveName + ".");
+            citizensList.loadCitizens(saveJson.citizens);
+        }
+        citizensList.refreshGfx();
+    };
+    Game.prototype.saveState = function () {
+        var saveName = "save1";
+        var saveJson = {
+            citizens: citizensList.citizens
+        };
+        var saveString = JSON.stringify(saveJson);
+        localStorage.setItem(saveName, saveString);
+        console.log("Saved data to " + saveName + ".");
+    };
     Game.prototype.init = function () {
+        var _this = this;
+        //TODO: merge tile & game classes
+        citizensList.initUI();
+        hexmap.init();
         this.selectedTypeElement = document.getElementById("selected_type");
         this.slectedPositionElement = document.getElementById("selected_position");
         this.selectedHeightElement = document.getElementById("selected_height");
         this.selectedWaterElement = document.getElementById("selected_water");
         this.selectedToxicityElement = document.getElementById("selected_toxicity");
+        document.getElementById("restart").onclick = function () { _this.resetState(); };
+        document.getElementById("savegame").onclick = function () { _this.saveState(); };
+        document.getElementById("loadgame").onclick = function () { _this.loadState(); };
+        this.loadState();
     };
     Game.prototype.clicked = function (q, r) {
         this.clicks++;
@@ -643,8 +693,6 @@ var citizensList = new CitizensList; // Doesn't work sadly yet, there is an erro
 var selectedTile = [0, 0]; // Need to remember selected tile
 window.onload = function () {
     console.log("Loaded");
-    //TODO: merge tile & game classes
-    hexmap.init();
     game.init();
     hexmap.onHexClicked = function (q, r) {
         selectedTile = [q, r];

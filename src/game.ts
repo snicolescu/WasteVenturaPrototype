@@ -14,6 +14,10 @@ UI
 
 */
 
+// Game Data
+
+const citizenNames: string[] = ["Cerbu", "Ioan", "Iulia", "Edi", "Silvia", "Sick", "Adi", "Andu", "Mihai", "Dan", "Vlad"];
+
 // Hex, Line & Point helpers
 
 function Pt(x : number, y : number) : Point { return new Point(x, y); };
@@ -25,7 +29,6 @@ const fullHexString = "50,87 100,0 50,-87 -50,-87 -100,-0 -50,87";
 // const smallHexString = "40,69.6 80,-0 40,-69.6 -40,-69.6 -80,-0 -40,69.6"; // 80% of the full size
 const smallHexString = "42.5,73.95 85,0 42.5,-73.95 -42.5,-73.95 -85,-0 -42.5,73.95"; // 85% of the full size
 // const smallHexString = "45,78.3 90,-0 45,-78.3 -45,-78.3 -90,-0 -45,78.3"; // 90% of the full size
-
 
 class Line {
     constructor( public q:number, public r:number, public dir:number) { }
@@ -476,49 +479,59 @@ class HexMap
 
 class Citizen
 {
-    constructor() {
-        this.name = "ph_name";
-        this.assignedTile = null;
-        this.status = false;
-    }
-    name: string;
-    assignedTile: number[];
-    status: boolean;
+    name: string = "ph_name";
+    assignedTile: number[] = null;
+    status: boolean = true;
 }
 
 class CitizensList
 {
     constructor() {
         this.citizens = [];
-        this.citizenNames = ["Cerbu", "Ioan", "Iulia", "Edi", "Silvia", "Sick", "Adi", "Andu", "Mihai", "Dan", "Vlad"];
-        this.table = document.getElementById("citizens_table") as HTMLTableElement;
-        // this.rows = this.table.getElementsByTagName("tr"); // It doesn't work sadly, , there is an error when trying to get the rows
+        //CRB: This doesn't work because it's called in the constructor, but the html hasn't finished loading. Need to wait for onload
+        //this.table = document.getElementById("citizens_table") as HTMLTableElement;
     }
    
+    // Game
     citizens: Citizen[];
-    citizenNames: string[];
+
+    // UI
     table: HTMLTableElement;
     rows: HTMLCollectionOf<HTMLTableRowElement>;
-    
-    addCitizen() {
-        this.citizens.push(new Citizen);
+
+    initUI() {
+        this.table = document.getElementById("citizens_table") as HTMLTableElement;
+        this.rows = this.table.rows;
     }
 
-    removeCitizen() {
-        this.citizens.pop();
+    loadCitizens( citizens: Citizen[]) {
+        this.citizens = citizens;
     }
 
     populateWithRandomCitizens() {
+        this.citizens = [];
         for (let i = 0; i < 10; i++) {
             let citizen = new Citizen;
-            citizen.name = this.citizenNames[Math.floor(Math.random() * this.citizenNames.length)];
-            this.addCitizen();
+            citizen.name = citizenNames[Math.floor(Math.random() * citizenNames.length)];
+            this.citizens.push(citizen);
         }
     }
 
-    clearTable() {
-        for (let i = this.rows.length - 1; i > 0; i--) {
-            this.table.deleteRow(i);
+    refreshGfx() {
+        // clearTable
+        for (let i = 0; i < this.citizens.length; i++) {
+            this.table.deleteRow(-1);
+        }
+        // fill it based on citizens
+        for (let i = 0; i < this.citizens.length; i++) {
+            let citizen = this.citizens[i];
+            let row = this.table.insertRow(-1);
+            let cell1 = row.insertCell(0);
+            let cell2 = row.insertCell(1);
+            let cell3 = row.insertCell(2);
+            cell1.innerHTML = citizen.name;
+            cell2.innerHTML = citizen.assignedTile ? citizen.assignedTile[0] + "," + citizen.assignedTile[1] : "Idle";
+            cell3.innerHTML = citizen.status ? "Alive" : "Dead";
         }
     }
 }
@@ -529,6 +542,38 @@ class Game
         this.clicks = 0;
     }
 
+    resetState() {
+        localStorage.clear();
+        this.loadState();
+    }
+
+    loadState() {
+        let saveName = "save1";
+        let saveString = localStorage.getItem( saveName);
+        if (saveString === null) {
+            console.log("No saved data found. Generating new random one.");
+
+            citizensList.populateWithRandomCitizens();
+        }else {
+            let saveJson = JSON.parse(saveString);
+            console.log("Loaded saved data from " + saveName + ".");
+
+            citizensList.loadCitizens( saveJson.citizens);
+        }
+
+        citizensList.refreshGfx();
+    }
+
+    saveState() {
+        let saveName = "save1";
+        let saveJson = {
+            citizens: citizensList.citizens,
+        };
+        let saveString = JSON.stringify(saveJson);
+        localStorage.setItem( saveName, saveString);
+        console.log("Saved data to " + saveName + ".");
+    }
+
     clicks : number;
     selectedTypeElement : Element;
     slectedPositionElement : Element;
@@ -537,11 +582,21 @@ class Game
     selectedToxicityElement : Element;
 
     init() {
+        //TODO: merge tile & game classes
+        citizensList.initUI();
+        hexmap.init();
+
         this.selectedTypeElement = document.getElementById("selected_type");
         this.slectedPositionElement = document.getElementById("selected_position");
         this.selectedHeightElement = document.getElementById("selected_height");
         this.selectedWaterElement = document.getElementById("selected_water");
         this.selectedToxicityElement = document.getElementById("selected_toxicity");
+
+        document.getElementById("restart").onclick = () => { this.resetState(); };
+        document.getElementById("savegame").onclick = () => { this.saveState(); };
+        document.getElementById("loadgame").onclick = () => { this.loadState(); };
+
+        this.loadState();
     }
 
     clicked( q:number, r:number) {
@@ -565,9 +620,8 @@ var selectedTile:number[] = [0,0]; // Need to remember selected tile
 window.onload = function () {
     console.log("Loaded");
 
-    //TODO: merge tile & game classes
-    hexmap.init();
     game.init();
+
     hexmap.onHexClicked = (q:number, r:number) => { 
         selectedTile = [q ,r];
         hexmap.selectHex(q,r);
