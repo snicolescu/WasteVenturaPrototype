@@ -10,6 +10,7 @@ class Hex
     constructor (public q:number, public r:number) {
     }
 
+    /*
     public add(b:Hex):Hex
     {
         return new Hex(this.q + b.q, this.r + b.r);
@@ -38,27 +39,23 @@ class Hex
         let s = -this.q - this.r;
         return new Hex(-this.r, -s);
     }
+    */
 
     public static directions:Hex[] = [new Hex(1, 0), new Hex(1, -1), new Hex(0, -1), new Hex(-1, 0), new Hex(-1, 1), new Hex(0, 1)];
 
-    public static direction(direction:number):Hex
+    public static neighbor(h:Hex, direction:number):Hex
     {
-        return Hex.directions[direction];
-    }
-
-    public neighbor(direction:number):Hex
-    {
-        return this.add(Hex.direction(direction));
+        return new Hex( h.q + Hex.directions[direction].q, h.r + Hex.directions[direction].r);
     }
 
     public static diagonals:Hex[] = [new Hex(2, -1), new Hex(1, -2), new Hex(-1, -1), new Hex(-2, 1), new Hex(-1, 2), new Hex(1, 1)];
 
-    public diagonalNeighbor(direction:number):Hex
+    public static diagonalNeighbor(h :Hex, direction:number):Hex
     {
-        return this.add(Hex.diagonals[direction]);
+        return new Hex( h.q + Hex.diagonals[direction].q, h.r + Hex.diagonals[direction].r);
     }
 
-
+    /*
     public len():number
     {
         let s = -this.q - this.r;
@@ -75,7 +72,6 @@ class Hex
         return new Hex(this.q * (1.0 - t) + b.q * t, this.r * (1.0 - t) + b.r * t);
     }
 
-    /*
     public round():Hex
     {
         var qi:number = Math.round(this.q);

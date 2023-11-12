@@ -18,6 +18,16 @@ UI
 
 const citizenNames: string[] = ["Cerbu", "Ioan", "Iulia", "Edi", "Silvia", "Sick", "Adi", "Andu", "Mihai", "Dan", "Vlad"];
 
+enum LineBuildings {
+    Empty,
+    Waterway
+};
+
+enum CornerBuildings {
+    Empty,
+    PowerPoint //Hehe
+};
+
 // Hex, Line & Point helpers
 
 function Pt(x : number, y : number) : Point { return new Point(x, y); };
@@ -130,6 +140,15 @@ function rgbToHexa(r: number, g: number, b: number) {
     return `#${((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1)}`;
 }
 
+function clamp(n: number, min: number, max: number) {
+    return Math.max(min, Math.min(max, n));
+}
+
+// returns a random integer in the range [min, max]
+function randInt(min: number, max: number) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
 // SVG helpers
 
 function createSmallHexElement() {
@@ -200,14 +219,14 @@ function setTileGfx( element : Element, tile : TileData)
             break;
         case Lens.None:
             element.removeAttribute("fill");
-
+            element.removeAttribute("class");
             // type-specific style
             if (tile.toxicity > 0) {
-                element.setAttribute("class", "toxic");
+                element.classList.add("toxic" + clamp(tile.toxicity, 1, 4));
             } else if (tile.water > 0) {
-                element.setAttribute("class", "water");
+                element.classList.add("water" + clamp(tile.water, 1, 3));
             } else {
-                element.setAttribute("class", "land");
+                element.classList.add("land"+ randInt(1, 3));
             }
 
             break;
@@ -216,17 +235,30 @@ function setTileGfx( element : Element, tile : TileData)
 
 function setLineGfx( element : Element, line : LineData)
 {
-
+    switch (line.built) {
+        case LineBuildings.Empty:
+            element.setAttribute("class", "line-empty");
+            break;
+        case LineBuildings.Waterway:
+            element.setAttribute("class", "line-waterway");
+            break;
+    }
 }
 
 function setCornerGfx( element : Element, corner : CornerData)
 {
-
+    switch (corner.built) {
+        case CornerBuildings.Empty:
+            element.setAttribute("class", "corner-empty");
+            break;
+        case CornerBuildings.PowerPoint:
+            element.setAttribute("class", "corner-power");
+            break;
+    }
 }
 
 function onSelectHex( hex: Hex) {
     hexmap.tileElements[hexKey(hex.q, hex.r)].classList.add("selected");
-
 }
 
 function onHexHovered(hex: Hex) {
@@ -256,7 +288,7 @@ function onHexHovered(hex: Hex) {
 
     // number the neighbours
     for (let dir = 0; dir < 6; dir++) {
-        let neighbour = hex.neighbor(dir);
+        let neighbour = Hex.neighbor(hex, dir);
         let neighbourText = `${dir}`;
         let neighbourP = hexmap.layout.getPixel(neighbour.q, neighbour.r);
         let neighbourTextElement = createTextElement(neighbourP.x, neighbourP.y, neighbourText);
@@ -266,6 +298,10 @@ function onHexHovered(hex: Hex) {
     }
 
     hexmap.tileElements[hexKey(hex.q, hex.r)].classList.add("hover");
+}
+
+function onHexUnhovered(hex: Hex) {
+    hexmap.tileElements[hexKey(hex.q, hex.r)].classList.remove("hover");
 }
 
 function onLineHovered(line: Line) {
@@ -281,7 +317,7 @@ function onLineHovered(line: Line) {
         tempElements.push(neighbourTextElement);
     });
     //BUG: Getting error hovering over edge lines
-    hexmap.lineElements[lineKey(line.q, line.r, line.dir)].classList.add("line_hover");
+    hexmap.lineElements[lineKey(line.q, line.r, line.dir)].classList.add("line-hover");
 }
 
 function onCornerHovered(corner: Corner) {
@@ -296,13 +332,13 @@ function onCornerHovered(corner: Corner) {
         hexmap.mapHtml.appendChild(neighbourTextElement);
         tempElements.push(neighbourTextElement);
     });
-    hexmap.cornerElements[lineKey(corner.q, corner.r, corner.dir)].classList.add("point_hover");
+    hexmap.cornerElements[lineKey(corner.q, corner.r, corner.dir)].classList.add("corner-hover");
 }
 
 
 class TileData
 {
-    public hex: Hex;
+    public coords   : Hex = null;
     public height   : number = 0;
     public water    : number = 0;
     public toxicity : number = 0;
@@ -310,20 +346,26 @@ class TileData
     static toxicTile() : TileData
     {
         let tile = new TileData();
-        tile.toxicity = 1;
+        tile.toxicity = randInt(1,4);
         return tile;
     }
 
     static waterTile() : TileData
     {
         let tile = new TileData();
-        tile.water = 1;
+        tile.water = randInt(1,3);
+        return tile;
+    }
+
+    static landTile() : TileData
+    {
+        let tile = new TileData();
         return tile;
     }
 
     public static makeRandomTile() : TileData
     {
-        let funcs = [ TileData.toxicTile, TileData.waterTile ];
+        let funcs = [ TileData.toxicTile, TileData.waterTile, TileData.landTile ];
         let tile = funcs[Math.floor(Math.random() * funcs.length)]();
         tile.height = Math.floor(Math.random() * 5);
         return tile;
@@ -332,12 +374,14 @@ class TileData
 
 class LineData
 {
-
+    coords: Line = null;
+    built : LineBuildings = LineBuildings.Empty;
 }
 
 class CornerData
 {
-
+    coords: Line = null;
+    built : CornerBuildings = CornerBuildings.Empty;
 }
 
 class HexMap
@@ -352,18 +396,17 @@ class HexMap
     // UI
     public layout = new Layout(Layout.flat, Pt(100,100), Pt(0,0));
     public mapHtml: Element;
-    public tileElements : { [key: number]: Element; } = { };
-    public lineElements : { [key: number]: Element; } = { };
-    public cornerElements : { [key: number]: Element; } = { };
+    public tileElements? : { [key: number]: Element; };
+    public lineElements? : { [key: number]: Element; };
+    public cornerElements? : { [key: number]: Element; };
 
-    public onHexClicked : (q:number, r:number) => void;
-    public onLineClicked : (q:number, r:number, dir:number) => void;
-    public onCornerClicked : (q:number, r:number, dir:number) => void;
+    public onHexClicked : ( hex: Hex) => void;
+    public onLineClicked : ( line: Line) => void;
+    public onCornerClicked : ( corner: Corner) => void;
 
     init()
     {
         this.mapHtml = document.getElementById("hexmap");
-        this.createMapElements();
         this.setCamera( 0, 0, 0.5);
     }
 
@@ -380,16 +423,78 @@ class HexMap
 
     refreshGfx()
     {
+        if ( this.tileElements === undefined)
+        {
+            this.tileElements = {};
+            for (let key in this.tiles) {
+                let tile = this.tiles[key];
+                let hex = tile.coords;
+                // tile hex
+                const polygon = createSmallHexElement();
+                polygon.onclick = () => { this.onHexClicked( hex); };
+                polygon.onmouseenter = () => { onHexHovered( hex); };
+                polygon.onmouseleave = () => { onHexUnhovered( hex); };
+                
+                // move everything toghether
+                const tileElement = document.createElementNS("http://www.w3.org/2000/svg", "g");
+                tileElement.appendChild(polygon);
+                let p = this.layout.getPixel( hex.q, hex.r);
+                tileElement.setAttribute("transform", `translate(${p.x},${p.y})`);
+                this.tileElements[hexKey( hex.q, hex.r)] = tileElement;
+                this.mapHtml.appendChild(tileElement);
+            }
+        }
+
         for (let key in this.tiles) {
             let tile = this.tiles[key];
             let element = this.tileElements[key];
             setTileGfx( element, tile);
         }
+
+        if ( this.lineElements === undefined)
+        {
+            this.lineElements = {};
+            for (let key in this.lines) {
+                let lineData = this.lines[key];
+                let line = lineData.coords;
+
+                let hexCenter = this.layout.getPixel( line.q, line.r);
+                let lineElement = createLineElement( 
+                    hexCenter.x + hexPoints[line.dir].x     , hexCenter.y + hexPoints[line.dir].y, 
+                    hexCenter.x + hexPoints[line.dir + 1].x , hexCenter.y + hexPoints[line.dir + 1].y);
+                lineElement.onclick = () => { this.onLineClicked(line); };
+                lineElement.onmouseenter = () => { onLineHovered(line); };
+                lineElement.onmouseleave = () => { lineElement.classList.remove("line-hover") };
+
+                this.lineElements[key] = lineElement;
+                this.mapHtml.appendChild(lineElement);
+            }
+        }
+
         for (let key in this.lines) {
             let line = this.lines[key];
             let element = this.lineElements[key];
             setLineGfx( element, line);
         }
+
+        if (this.cornerElements === undefined)
+        {
+            this.cornerElements = {};
+            for (let key in this.corners) {
+                let cornerData = this.corners[key];
+                let corner = cornerData.coords;
+
+                let hexCenter = this.layout.getPixel( corner.q, corner.r);
+                let pointElement = createCircleElement( hexCenter.x + hexPoints[corner.dir].x, hexCenter.y + hexPoints[corner.dir].y, 10);
+                pointElement.onclick = () => { this.onCornerClicked( corner); };
+                pointElement.onmouseenter = () => { onCornerHovered( corner); };
+                pointElement.onmouseleave = () => { pointElement.classList.remove("corner-hover") };
+
+                this.cornerElements[key] = pointElement;
+                this.mapHtml.appendChild(pointElement);
+            }
+        }
+
         for (let key in this.corners) {
             let corner = this.corners[key];
             let element = this.cornerElements[key];
@@ -422,7 +527,7 @@ class HexMap
         const hex = new Hex(q,r);
 
         // hex data
-        tile.hex = hex;
+        tile.coords = hex;
         this.tiles[hexKey(q,r)] = tile;
         
         // hex lines
@@ -433,7 +538,8 @@ class HexMap
             if ( lineNum < 3 || !this.isHexInMap( line.q, line.r) )
             {
                 let lineData = new LineData();
-                this.lines[lineKey(q,r,lineNum)] = lineData;
+                lineData.coords = line;
+                this.lines[lineKey(line.q, line.r, line.dir)] = lineData;
             }
         }
 
@@ -451,75 +557,9 @@ class HexMap
 
             // game logic data
             let cornerData = new CornerData();
-            this.corners[cornerKey(q,r,cornerNum)] = cornerData;
+            cornerData.coords = corner;
+            this.corners[cornerKey( corner.q, corner.r, corner.dir )] = cornerData;
         }
-    }
-
-    createMapElements()
-    {
-        // add html elements for tiles, lines & corners
-        for (let x = -this.mapRadius; x <= this.mapRadius; x++) {
-            for (let y = -this.mapRadius; y <= this.mapRadius; y++) {
-                if (Math.abs(x + y) <= this.mapRadius) {
-                    this.createTileElements( x, y);
-                }
-            }
-        }
-    }
-
-    createTileElements( q:number, r:number)
-    {
-        const hex = new Hex(q,r);
-        const newElement = document.createElementNS("http://www.w3.org/2000/svg", "g");
-
-        // tile hex
-        const polygon = createSmallHexElement();
-        polygon.onclick = () => { this.onHexClicked(q,r); };
-        polygon.onmouseenter = () => { onHexHovered( new Hex(q,r)); };
-        polygon.onmouseleave = () => { polygon.classList.remove("hover") };
-        newElement.appendChild(polygon);
-        this.tileElements[hexKey(q,r)] = polygon;
-        
-        // hex lines
-        let hexLines = getHexLines(hex);
-        for (let lineNum = 0; lineNum < 6; lineNum++)
-        {
-            let line = hexLines[lineNum];
-            if ( lineNum < 3 || !this.isHexInMap( line.q, line.r) )
-            {
-                let lineElement = createLineElement( hexPoints[lineNum].x, hexPoints[lineNum].y, hexPoints[lineNum + 1].x, hexPoints[lineNum + 1].y);
-                lineElement.onclick = () => { this.onLineClicked(q,r,lineNum); };
-                lineElement.onmouseenter = () => { onLineHovered( line); };
-                lineElement.onmouseleave = () => { lineElement.classList.remove("line_hover") };
-                newElement.appendChild(lineElement);
-                this.lineElements[lineKey(q,r,lineNum)] = lineElement;
-            }
-        }
-
-        // hex corners (only on the inside of the map)
-        let hexCorners = getHexCorners(hex);
-        for (let cornerNum = 0; cornerNum < 3; cornerNum++) // only 3 corners since other 3 are covered by other hexes
-        {
-            let keepCorner = true;
-            let corner = hexCorners[cornerNum];
-            for ( let hex of getCornerHexes(corner) )
-                if ( !this.isHexInMap( hex.q, hex.r) )
-                    keepCorner = false;
-            if (!keepCorner)
-                continue;
-
-            let pointElement = createCircleElement( hexPoints[cornerNum].x, hexPoints[cornerNum].y, 10);
-            pointElement.onclick = () => { this.onCornerClicked(q,r,cornerNum); };
-            pointElement.onmouseenter = () => { onCornerHovered( corner); };
-            pointElement.onmouseleave = () => { pointElement.classList.remove("point_hover") };
-            newElement.appendChild(pointElement);
-            this.cornerElements[cornerKey(q,r,cornerNum)] = pointElement;
-        }
-
-        // move everything toghether
-        let p = this.layout.getPixel( q, r);
-        newElement.setAttribute("transform", `translate(${p.x},${p.y})`);
-        this.mapHtml.appendChild(newElement);
     }
 }
 
@@ -674,28 +714,28 @@ window.onload = function () {
 
     game.init();
 
-    hexmap.onHexClicked = (q:number, r:number) => { 
-        selectedTile = [q ,r];
-        hexmap.selectHex(q,r);
+    hexmap.onHexClicked = (hex: Hex) => { 
+        selectedTile = [ hex.q ,hex.r];
+        hexmap.selectHex(hex.q,hex.r);
 
         game.selectedTypeElement.textContent = "Type: Hex" 
-        game.slectedPositionElement.textContent = "Position: " + q + "," + r + ",";
-        game.selectedHeightElement.textContent = "Height: " + hexmap.tiles[hexKey(q,r)].height;
-        game.selectedWaterElement.textContent = "Water: " + hexmap.tiles[hexKey(q,r)].water;
-        game.selectedToxicityElement.textContent = "Toxicity: " + hexmap.tiles[hexKey(q,r)].toxicity;
+        game.slectedPositionElement.textContent = "Position: " + hex.q + "," + hex.r + ",";
+        game.selectedHeightElement.textContent = "Height: "     + hexmap.tiles[hexKey(hex.q,hex.r)].height;
+        game.selectedWaterElement.textContent = "Water: "       + hexmap.tiles[hexKey(hex.q,hex.r)].water;
+        game.selectedToxicityElement.textContent = "Toxicity: " + hexmap.tiles[hexKey(hex.q,hex.r)].toxicity;
     };
 
-    hexmap.onLineClicked = (q:number, r:number, dir:number) => {
+    hexmap.onLineClicked = ( line : Line) => {
     game.selectedTypeElement.textContent = "Type: Edge" 
-    game.slectedPositionElement.textContent = "Position: " + q + "," + r + "," + dir;
+    game.slectedPositionElement.textContent = "Position: " + line.q + "," + line.r + "," + line.dir;
     game.selectedHeightElement.textContent = "";
     game.selectedWaterElement.textContent = "";
     game.selectedToxicityElement.textContent = "";
     };
 
-    hexmap.onCornerClicked = (q:number, r:number, dir:number) => {
+    hexmap.onCornerClicked = ( corner :Corner) => {
     game.selectedTypeElement.textContent = "Type: Point" 
-    game.slectedPositionElement.textContent = "Position: " + q + "," + r + "," + dir;
+    game.slectedPositionElement.textContent = "Position: " + corner.q + "," + corner.r + "," + corner.dir;
     game.selectedHeightElement.textContent = "";
     game.selectedWaterElement.textContent = "";
     game.selectedToxicityElement.textContent = "";
