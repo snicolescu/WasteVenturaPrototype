@@ -201,6 +201,8 @@ UI
 */
 // Game Data
 var citizenNames = ["Cerbu", "Ioan", "Iulia", "Edi", "Silvia", "Sick", "Adi", "Andu", "Mihai", "Dan", "Vlad"];
+var toxicityThresholds = [10, 20, 35, 55, 80];
+var toxicityPerTurn = 0.2; // how much toxicity is spread by toxic tiles. multiplied by their toxicity level
 var LineBuildings;
 (function (LineBuildings) {
     LineBuildings[LineBuildings["Empty"] = 0] = "Empty";
@@ -213,6 +215,14 @@ var CornerBuildings;
     CornerBuildings[CornerBuildings["PowerPoint"] = 1] = "PowerPoint"; //Hehe
 })(CornerBuildings || (CornerBuildings = {}));
 ;
+function getToxicityLevel(toxicity) {
+    for (var i = 0; i < toxicityThresholds.length; i++) {
+        if (toxicity < toxicityThresholds[i]) {
+            return i;
+        }
+    }
+    return toxicityThresholds.length;
+}
 // Hex, Line & Point helpers
 function Pt(x, y) { return new Point(x, y); }
 ;
@@ -221,8 +231,8 @@ function Pt(x, y) { return new Point(x, y); }
 var hexPoints = [Pt(50, 87), Pt(100, 0), Pt(50, -87), Pt(-50, -87), Pt(-100, -0), Pt(-50, 87), Pt(50, 87)];
 var fullHexString = "50,87 100,0 50,-87 -50,-87 -100,-0 -50,87";
 // const smallHexString = "40,69.6 80,-0 40,-69.6 -40,-69.6 -80,-0 -40,69.6"; // 80% of the full size
-var smallHexString = "42.5,73.95 85,0 42.5,-73.95 -42.5,-73.95 -85,-0 -42.5,73.95"; // 85% of the full size
-// const smallHexString = "45,78.3 90,-0 45,-78.3 -45,-78.3 -90,-0 -45,78.3"; // 90% of the full size
+//const smallHexString = "42.5,73.95 85,0 42.5,-73.95 -42.5,-73.95 -85,-0 -42.5,73.95"; // 85% of the full size
+var smallHexString = "45,78.3 90,-0 45,-78.3 -45,-78.3 -90,-0 -45,78.3"; // 90% of the full size
 var Line = /** @class */ (function () {
     function Line(q, r, dir) {
         this.q = q;
@@ -239,6 +249,14 @@ var Corner = /** @class */ (function () {
     }
     return Corner;
 }());
+function getHexNeighbours(hex) {
+    return [new Hex(hex.q + Hex.directions[0].q, hex.r + Hex.directions[0].r),
+        new Hex(hex.q + Hex.directions[1].q, hex.r + Hex.directions[1].r),
+        new Hex(hex.q + Hex.directions[2].q, hex.r + Hex.directions[2].r),
+        new Hex(hex.q + Hex.directions[3].q, hex.r + Hex.directions[3].r),
+        new Hex(hex.q + Hex.directions[4].q, hex.r + Hex.directions[4].r),
+        new Hex(hex.q + Hex.directions[5].q, hex.r + Hex.directions[5].r)];
+}
 // CRB: Basically each hex has 3 lines that "belong" to it.  The line is identified by the hex and the direction.
 //  So to get the other three you look in the remaining three directions and point towards this hex
 function getHexLines(hex) {
@@ -378,8 +396,9 @@ function setTileGfx(element, tile) {
             element.removeAttribute("fill");
             element.removeAttribute("class");
             // type-specific style
-            if (tile.toxicity > 0) {
-                element.classList.add("toxic" + clamp(tile.toxicity, 1, 4));
+            if (tile.toxicity > toxicityThresholds[0]) {
+                var toxicityLevel = getToxicityLevel(tile.toxicity);
+                element.classList.add("toxic" + clamp(toxicityLevel, 1, 4));
             }
             else if (tile.water > 0) {
                 element.classList.add("water" + clamp(tile.water, 1, 3));
@@ -484,7 +503,7 @@ var TileData = /** @class */ (function () {
     }
     TileData.toxicTile = function () {
         var tile = new TileData();
-        tile.toxicity = randInt(1, 4);
+        tile.toxicity = toxicityThresholds[randInt(0, 3)];
         return tile;
     };
     TileData.waterTile = function () {
@@ -617,6 +636,17 @@ var HexMap = /** @class */ (function () {
             var element = this.cornerElements[key];
             setCornerGfx(element, corner);
         }
+    };
+    HexMap.prototype.getTileNeighbourTiles = function (tile) {
+        var neighbours = [];
+        for (var _i = 0, _a = getHexNeighbours(tile.coords); _i < _a.length; _i++) {
+            var neighbourHex = _a[_i];
+            var neighbour = this.tiles[hexKey(neighbourHex.q, neighbourHex.r)];
+            if (neighbour) {
+                neighbours.push(neighbour);
+            }
+        }
+        return neighbours;
     };
     HexMap.prototype.isHexInMap = function (q, r) {
         return ((Math.abs(q) + Math.abs(r) + Math.abs(-q - r)) / 2) <= this.mapRadius; //hex.len() <= this.mapRadius;
@@ -768,12 +798,31 @@ var Game = /** @class */ (function () {
         document.getElementById("restart").onclick = function () { _this.resetState(); };
         document.getElementById("savegame").onclick = function () { _this.saveState(); };
         document.getElementById("loadgame").onclick = function () { _this.loadState(); };
+        document.getElementById("nextturn").onclick = function () { _this.nextTurn(); };
         this.loadState();
     };
     Game.prototype.clicked = function (q, r) {
         this.clicks++;
         this.selectedTypeElement.textContent = "Score:" + this.clicks;
         console.log("Clicked ", q, r);
+    };
+    Game.prototype.nextTurn = function () {
+        // spread toxicity
+        for (var key in hexmap.tiles) {
+            var tile = hexmap.tiles[key];
+            if (tile.toxicity > toxicityThresholds[0]) {
+                var toxicityLevel = getToxicityLevel(tile.toxicity);
+                var maxToxicity = toxicityThresholds[toxicityLevel];
+                for (var _i = 0, _a = hexmap.getTileNeighbourTiles(tile); _i < _a.length; _i++) {
+                    var neighbor = _a[_i];
+                    if (neighbor.toxicity < maxToxicity) {
+                        neighbor.toxicity = clamp(neighbor.toxicity + toxicityPerTurn * toxicityLevel, 0, maxToxicity);
+                    }
+                }
+            }
+        }
+        citizensList.refreshGfx();
+        hexmap.refreshGfx();
     };
     return Game;
 }());
@@ -791,7 +840,8 @@ window.onload = function () {
         game.slectedPositionElement.textContent = "Position: " + hex.q + "," + hex.r + ",";
         game.selectedHeightElement.textContent = "Height: " + hexmap.tiles[hexKey(hex.q, hex.r)].height;
         game.selectedWaterElement.textContent = "Water: " + hexmap.tiles[hexKey(hex.q, hex.r)].water;
-        game.selectedToxicityElement.textContent = "Toxicity: " + hexmap.tiles[hexKey(hex.q, hex.r)].toxicity;
+        var tox = hexmap.tiles[hexKey(hex.q, hex.r)].toxicity;
+        game.selectedToxicityElement.textContent = "Toxicity: " + getToxicityLevel(tox) + " (" + tox + ")";
     };
     hexmap.onLineClicked = function (line) {
         game.selectedTypeElement.textContent = "Type: Edge";
