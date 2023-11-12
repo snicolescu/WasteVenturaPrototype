@@ -1,6 +1,6 @@
 /// <reference path="./hex.ts" />
 
-/* TODO:
+/* 
 Game
 - build waterways on edges
 - water flowing logic
@@ -296,14 +296,15 @@ function onCornerHovered(corner: Corner) {
         hexmap.mapHtml.appendChild(neighbourTextElement);
         tempElements.push(neighbourTextElement);
     });
-    hexmap.pointElements[lineKey(corner.q, corner.r, corner.dir)].classList.add("point_hover");
+    hexmap.cornerElements[lineKey(corner.q, corner.r, corner.dir)].classList.add("point_hover");
 }
 
 
 class TileData
 {
-    public height : number = 0;
-    public water : number = 0;
+    public hex: Hex;
+    public height   : number = 0;
+    public water    : number = 0;
     public toxicity : number = 0;
 
     static toxicTile() : TileData
@@ -313,14 +314,14 @@ class TileData
         return tile;
     }
 
-    public static waterTile() : TileData
+    static waterTile() : TileData
     {
         let tile = new TileData();
         tile.water = 1;
         return tile;
     }
 
-    public static getRandomTile() : TileData
+    public static makeRandomTile() : TileData
     {
         let funcs = [ TileData.toxicTile, TileData.waterTile ];
         let tile = funcs[Math.floor(Math.random() * funcs.length)]();
@@ -341,39 +342,59 @@ class CornerData
 
 class HexMap
 {
-    public layout : Layout;
-    public mapHtml: Element;
+    // Game
     public mapRadius: number = 5;
-
+    
     public tiles : { [key: number]: TileData; } = { };
-    public tileElements : { [key: number]: Element; } = { };
     public lines : { [key: number]: LineData; } = { };
+    public corners : { [key: number]: CornerData; } = { };
+    
+    // UI
+    public layout = new Layout(Layout.flat, Pt(100,100), Pt(0,0));
+    public mapHtml: Element;
+    public tileElements : { [key: number]: Element; } = { };
     public lineElements : { [key: number]: Element; } = { };
-    public points : { [key: number]: CornerData; } = { };
-    public pointElements : { [key: number]: Element; } = { };
+    public cornerElements : { [key: number]: Element; } = { };
 
     public onHexClicked : (q:number, r:number) => void;
     public onLineClicked : (q:number, r:number, dir:number) => void;
     public onCornerClicked : (q:number, r:number, dir:number) => void;
 
-    constructor()
-    {
-        this.layout = new Layout( Layout.flat, Pt(100, 100), Pt(0,0));
-    }
-    
     init()
     {
         this.mapHtml = document.getElementById("hexmap");
+        this.createMapElements();
+        this.setCamera( 0, 0, 0.5);
+    }
 
+    populateWithRandomTiles()
+    {
         for (let x = -this.mapRadius; x <= this.mapRadius; x++) {
             for (let y = -this.mapRadius; y <= this.mapRadius; y++) {
                 if (Math.abs(x + y) <= this.mapRadius) {
-                    this.addHexElement( x, y);
+                    this.addNewTile( x, y, TileData.makeRandomTile());
                 }
             }
         }
+    }
 
-        this.setCamera( 0, 0, 0.5);
+    refreshGfx()
+    {
+        for (let key in this.tiles) {
+            let tile = this.tiles[key];
+            let element = this.tileElements[key];
+            setTileGfx( element, tile);
+        }
+        for (let key in this.lines) {
+            let line = this.lines[key];
+            let element = this.lineElements[key];
+            setLineGfx( element, line);
+        }
+        for (let key in this.corners) {
+            let corner = this.corners[key];
+            let element = this.cornerElements[key];
+            setCornerGfx( element, corner);
+        }
     }
 
     isHexInMap( q:number, r:number) : boolean
@@ -395,10 +416,60 @@ class HexMap
         this.mapHtml.setAttribute("transform", `translate(${q},${y}) scale(${scale})`);
     }
 
-    addHexElement( q:number, r:number) : Element
+    ///> Adds the tile to the map and creates the lines and corners
+    addNewTile( q:number, r:number, tile:TileData)
     {
-        let p = this.layout.getPixel( q, r);
+        const hex = new Hex(q,r);
 
+        // hex data
+        tile.hex = hex;
+        this.tiles[hexKey(q,r)] = tile;
+        
+        // hex lines
+        let hexLines = getHexLines(hex);
+        for (let lineNum = 0; lineNum < 6; lineNum++)
+        {
+            let line = hexLines[lineNum];
+            if ( lineNum < 3 || !this.isHexInMap( line.q, line.r) )
+            {
+                let lineData = new LineData();
+                this.lines[lineKey(q,r,lineNum)] = lineData;
+            }
+        }
+
+        // hex corners (only on the inside of the map)
+        let hexCorners = getHexCorners(hex);
+        for (let cornerNum = 0; cornerNum < 3; cornerNum++) // only 3 corners since other 3 are covered by other hexes
+        {
+            let keepCorner = true;
+            let corner = hexCorners[cornerNum];
+            for ( let hex of getCornerHexes(corner) )
+                if ( !this.isHexInMap( hex.q, hex.r) )
+                    keepCorner = false;
+            if (!keepCorner)
+                continue;
+
+            // game logic data
+            let cornerData = new CornerData();
+            this.corners[cornerKey(q,r,cornerNum)] = cornerData;
+        }
+    }
+
+    createMapElements()
+    {
+        // add html elements for tiles, lines & corners
+        for (let x = -this.mapRadius; x <= this.mapRadius; x++) {
+            for (let y = -this.mapRadius; y <= this.mapRadius; y++) {
+                if (Math.abs(x + y) <= this.mapRadius) {
+                    this.createTileElements( x, y);
+                }
+            }
+        }
+    }
+
+    createTileElements( q:number, r:number)
+    {
+        const hex = new Hex(q,r);
         const newElement = document.createElementNS("http://www.w3.org/2000/svg", "g");
 
         // tile hex
@@ -407,14 +478,8 @@ class HexMap
         polygon.onmouseenter = () => { onHexHovered( new Hex(q,r)); };
         polygon.onmouseleave = () => { polygon.classList.remove("hover") };
         newElement.appendChild(polygon);
-        // game logic data
-        let tile = TileData.getRandomTile();
-        this.tiles[hexKey(q,r)] = tile;
-        setTileGfx( polygon, tile);
         this.tileElements[hexKey(q,r)] = polygon;
-
         
-        let hex = new Hex(q,r);
         // hex lines
         let hexLines = getHexLines(hex);
         for (let lineNum = 0; lineNum < 6; lineNum++)
@@ -427,11 +492,6 @@ class HexMap
                 lineElement.onmouseenter = () => { onLineHovered( line); };
                 lineElement.onmouseleave = () => { lineElement.classList.remove("line_hover") };
                 newElement.appendChild(lineElement);
-
-                // game logic data
-                let lineData = new LineData();
-                this.lines[lineKey(q,r,lineNum)] = lineData;
-                setLineGfx(lineElement, lineData);
                 this.lineElements[lineKey(q,r,lineNum)] = lineElement;
             }
         }
@@ -453,27 +513,13 @@ class HexMap
             pointElement.onmouseenter = () => { onCornerHovered( corner); };
             pointElement.onmouseleave = () => { pointElement.classList.remove("point_hover") };
             newElement.appendChild(pointElement);
-            
-            // game logic data
-            let cornerData = new CornerData();
-            this.points[cornerKey(q,r,cornerNum)] = cornerData;
-            setCornerGfx(pointElement, cornerData);
-            this.pointElements[cornerKey(q,r,cornerNum)] = pointElement;
+            this.cornerElements[cornerKey(q,r,cornerNum)] = pointElement;
         }
 
         // move everything toghether
+        let p = this.layout.getPixel( q, r);
         newElement.setAttribute("transform", `translate(${p.x},${p.y})`);
         this.mapHtml.appendChild(newElement);
-
-        return newElement;
-    }
-
-    refreshGfx() {
-        for (let key in this.tiles) {
-            let tile = this.tiles[key];
-            let element = this.tileElements[key];
-            setTileGfx( element, tile);
-        }
     }
 }
 
@@ -554,20 +600,28 @@ class Game
             console.log("No saved data found. Generating new random one.");
 
             citizensList.populateWithRandomCitizens();
+            hexmap.populateWithRandomTiles();
         }else {
             let saveJson = JSON.parse(saveString);
             console.log("Loaded saved data from " + saveName + ".");
 
             citizensList.loadCitizens( saveJson.citizens);
+            hexmap.tiles = saveJson.tiles;
+            hexmap.lines = saveJson.lines;
+            hexmap.corners = saveJson.corners;
         }
 
         citizensList.refreshGfx();
+        hexmap.refreshGfx();
     }
 
     saveState() {
         let saveName = "save1";
         let saveJson = {
             citizens: citizensList.citizens,
+            tiles: hexmap.tiles,
+            lines: hexmap.lines,
+            corners: hexmap.corners
         };
         let saveString = JSON.stringify(saveJson);
         localStorage.setItem( saveName, saveString);
@@ -610,9 +664,7 @@ class Game
 
 let game = new Game;
 let hexmap = new HexMap;
-let citizensList = new CitizensList; // Doesn't work sadly yet, there is an error when trying to get the rows
-// citizensList.populateWithRandomCitizens();
-// citizensList.clearTable();
+let citizensList = new CitizensList;
 
 var selectedTile:number[] = [0,0]; // Need to remember selected tile
 

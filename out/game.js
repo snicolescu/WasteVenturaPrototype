@@ -187,6 +187,9 @@ var Layout = /** @class */ (function () {
 }());
 /// <reference path="./hex.ts" />
 /* TODO:
+save/load/restart hex data
+    also fill in the UI with the data
+
 Game
 - build waterways on edges
 - water flowing logic
@@ -434,7 +437,7 @@ function onCornerHovered(corner) {
         hexmap.mapHtml.appendChild(neighbourTextElement);
         tempElements.push(neighbourTextElement);
     });
-    hexmap.pointElements[lineKey(corner.q, corner.r, corner.dir)].classList.add("point_hover");
+    hexmap.cornerElements[lineKey(corner.q, corner.r, corner.dir)].classList.add("point_hover");
 }
 var TileData = /** @class */ (function () {
     function TileData() {
@@ -452,7 +455,7 @@ var TileData = /** @class */ (function () {
         tile.water = 1;
         return tile;
     };
-    TileData.getRandomTile = function () {
+    TileData.makeRandomTile = function () {
         var funcs = [TileData.toxicTile, TileData.waterTile];
         var tile = funcs[Math.floor(Math.random() * funcs.length)]();
         tile.height = Math.floor(Math.random() * 5);
@@ -472,25 +475,47 @@ var CornerData = /** @class */ (function () {
 }());
 var HexMap = /** @class */ (function () {
     function HexMap() {
+        // Game
         this.mapRadius = 5;
         this.tiles = {};
-        this.tileElements = {};
         this.lines = {};
-        this.lineElements = {};
-        this.points = {};
-        this.pointElements = {};
+        this.corners = {};
+        // UI
         this.layout = new Layout(Layout.flat, Pt(100, 100), Pt(0, 0));
+        this.tileElements = {};
+        this.lineElements = {};
+        this.cornerElements = {};
     }
     HexMap.prototype.init = function () {
         this.mapHtml = document.getElementById("hexmap");
+        this.createMapElements();
+        this.setCamera(0, 0, 0.5);
+    };
+    HexMap.prototype.populateWithRandomTiles = function () {
         for (var x = -this.mapRadius; x <= this.mapRadius; x++) {
             for (var y = -this.mapRadius; y <= this.mapRadius; y++) {
                 if (Math.abs(x + y) <= this.mapRadius) {
-                    this.addHexElement(x, y);
+                    this.addNewTile(x, y, TileData.makeRandomTile());
                 }
             }
         }
-        this.setCamera(0, 0, 0.5);
+    };
+    HexMap.prototype.refreshGfx = function () {
+        for (var key in this.tiles) {
+            var tile = this.tiles[key];
+            var element = this.tileElements[key];
+            setTileGfx(element, tile);
+        }
+        for (var key in this.lines) {
+            var line = this.lines[key];
+            var element = this.lineElements[key];
+            setLineGfx(element, line);
+        }
+        for (var key in this.corners) {
+            var corner = this.corners[key];
+            var element = this.cornerElements[key];
+            setCornerGfx(element, corner);
+        }
     };
     HexMap.prototype.isHexInMap = function (q, r) {
         return ((Math.abs(q) + Math.abs(r) + Math.abs(-q - r)) / 2) <= this.mapRadius; //hex.len() <= this.mapRadius;
@@ -505,9 +530,52 @@ var HexMap = /** @class */ (function () {
     HexMap.prototype.setCamera = function (q, y, scale) {
         this.mapHtml.setAttribute("transform", "translate(" + q + "," + y + ") scale(" + scale + ")");
     };
-    HexMap.prototype.addHexElement = function (q, r) {
+    ///> Adds the tile to the map and creates the lines and corners
+    HexMap.prototype.addNewTile = function (q, r, tile) {
+        var hex = new Hex(q, r);
+        // hex data
+        tile.hex = hex;
+        this.tiles[hexKey(q, r)] = tile;
+        // hex lines
+        var hexLines = getHexLines(hex);
+        for (var lineNum = 0; lineNum < 6; lineNum++) {
+            var line = hexLines[lineNum];
+            if (lineNum < 3 || !this.isHexInMap(line.q, line.r)) {
+                var lineData = new LineData();
+                this.lines[lineKey(q, r, lineNum)] = lineData;
+            }
+        }
+        // hex corners (only on the inside of the map)
+        var hexCorners = getHexCorners(hex);
+        for (var cornerNum = 0; cornerNum < 3; cornerNum++) // only 3 corners since other 3 are covered by other hexes
+         {
+            var keepCorner = true;
+            var corner = hexCorners[cornerNum];
+            for (var _i = 0, _a = getCornerHexes(corner); _i < _a.length; _i++) {
+                var hex_1 = _a[_i];
+                if (!this.isHexInMap(hex_1.q, hex_1.r))
+                    keepCorner = false;
+            }
+            if (!keepCorner)
+                continue;
+            // game logic data
+            var cornerData = new CornerData();
+            this.corners[cornerKey(q, r, cornerNum)] = cornerData;
+        }
+    };
+    HexMap.prototype.createMapElements = function () {
+        // add html elements for tiles, lines & corners
+        for (var x = -this.mapRadius; x <= this.mapRadius; x++) {
+            for (var y = -this.mapRadius; y <= this.mapRadius; y++) {
+                if (Math.abs(x + y) <= this.mapRadius) {
+                    this.createTileElements(x, y);
+                }
+            }
+        }
+    };
+    HexMap.prototype.createTileElements = function (q, r) {
         var _this = this;
-        var p = this.layout.getPixel(q, r);
+        var hex = new Hex(q, r);
         var newElement = document.createElementNS("http://www.w3.org/2000/svg", "g");
         // tile hex
         var polygon = createSmallHexElement();
@@ -515,12 +583,7 @@ var HexMap = /** @class */ (function () {
         polygon.onmouseenter = function () { onHexHovered(new Hex(q, r)); };
         polygon.onmouseleave = function () { polygon.classList.remove("hover"); };
         newElement.appendChild(polygon);
-        // game logic data
-        var tile = TileData.getRandomTile();
-        this.tiles[hexKey(q, r)] = tile;
-        setTileGfx(polygon, tile);
         this.tileElements[hexKey(q, r)] = polygon;
-        var hex = new Hex(q, r);
         // hex lines
         var hexLines = getHexLines(hex);
         var _loop_1 = function (lineNum) {
@@ -531,10 +594,6 @@ var HexMap = /** @class */ (function () {
                 lineElement_1.onmouseenter = function () { onLineHovered(line); };
                 lineElement_1.onmouseleave = function () { lineElement_1.classList.remove("line_hover"); };
                 newElement.appendChild(lineElement_1);
-                // game logic data
-                var lineData = new LineData();
-                this_1.lines[lineKey(q, r, lineNum)] = lineData;
-                setLineGfx(lineElement_1, lineData);
                 this_1.lineElements[lineKey(q, r, lineNum)] = lineElement_1;
             }
         };
@@ -548,8 +607,8 @@ var HexMap = /** @class */ (function () {
             var keepCorner = true;
             var corner = hexCorners[cornerNum];
             for (var _i = 0, _a = getCornerHexes(corner); _i < _a.length; _i++) {
-                var hex_1 = _a[_i];
-                if (!this_2.isHexInMap(hex_1.q, hex_1.r))
+                var hex_2 = _a[_i];
+                if (!this_2.isHexInMap(hex_2.q, hex_2.r))
                     keepCorner = false;
             }
             if (!keepCorner)
@@ -559,11 +618,7 @@ var HexMap = /** @class */ (function () {
             pointElement.onmouseenter = function () { onCornerHovered(corner); };
             pointElement.onmouseleave = function () { pointElement.classList.remove("point_hover"); };
             newElement.appendChild(pointElement);
-            // game logic data
-            var cornerData = new CornerData();
-            this_2.points[cornerKey(q, r, cornerNum)] = cornerData;
-            setCornerGfx(pointElement, cornerData);
-            this_2.pointElements[cornerKey(q, r, cornerNum)] = pointElement;
+            this_2.cornerElements[cornerKey(q, r, cornerNum)] = pointElement;
         };
         var this_2 = this;
         for (var cornerNum = 0; cornerNum < 3; cornerNum++) // only 3 corners since other 3 are covered by other hexes
@@ -571,16 +626,9 @@ var HexMap = /** @class */ (function () {
             _loop_2(cornerNum);
         }
         // move everything toghether
+        var p = this.layout.getPixel(q, r);
         newElement.setAttribute("transform", "translate(" + p.x + "," + p.y + ")");
         this.mapHtml.appendChild(newElement);
-        return newElement;
-    };
-    HexMap.prototype.refreshGfx = function () {
-        for (var key in this.tiles) {
-            var tile = this.tiles[key];
-            var element = this.tileElements[key];
-            setTileGfx(element, tile);
-        }
     };
     return HexMap;
 }());
@@ -646,18 +694,26 @@ var Game = /** @class */ (function () {
         if (saveString === null) {
             console.log("No saved data found. Generating new random one.");
             citizensList.populateWithRandomCitizens();
+            hexmap.populateWithRandomTiles();
         }
         else {
             var saveJson = JSON.parse(saveString);
             console.log("Loaded saved data from " + saveName + ".");
             citizensList.loadCitizens(saveJson.citizens);
+            hexmap.tiles = saveJson.tiles;
+            hexmap.lines = saveJson.lines;
+            hexmap.corners = saveJson.corners;
         }
         citizensList.refreshGfx();
+        hexmap.refreshGfx();
     };
     Game.prototype.saveState = function () {
         var saveName = "save1";
         var saveJson = {
-            citizens: citizensList.citizens
+            citizens: citizensList.citizens,
+            tiles: hexmap.tiles,
+            lines: hexmap.lines,
+            corners: hexmap.corners
         };
         var saveString = JSON.stringify(saveJson);
         localStorage.setItem(saveName, saveString);
@@ -687,9 +743,7 @@ var Game = /** @class */ (function () {
 }());
 var game = new Game;
 var hexmap = new HexMap;
-var citizensList = new CitizensList; // Doesn't work sadly yet, there is an error when trying to get the rows
-// citizensList.populateWithRandomCitizens();
-// citizensList.clearTable();
+var citizensList = new CitizensList;
 var selectedTile = [0, 0]; // Need to remember selected tile
 window.onload = function () {
     console.log("Loaded");
