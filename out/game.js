@@ -311,6 +311,9 @@ var Lens;
 (function (Lens) {
     Lens[Lens["None"] = 0] = "None";
     Lens[Lens["Height"] = 1] = "Height";
+    Lens[Lens["Humidity"] = 2] = "Humidity";
+    Lens[Lens["Energy"] = 3] = "Energy";
+    Lens[Lens["Toxicity"] = 4] = "Toxicity";
 })(Lens || (Lens = {}));
 var lens = Lens.None;
 function setLens(button) {
@@ -318,6 +321,12 @@ function setLens(button) {
         lens = Lens[key];
     } });
     hexmap.refreshGfx();
+    hexmap.addTextToAllElements(button.value, button.value.toLowerCase());
+}
+function removeLens() {
+    lens = Lens.None;
+    hexmap.refreshGfx();
+    hexmap.removeTextFromAllElements();
 }
 var debugHexes = true;
 // Helper functions
@@ -328,7 +337,7 @@ var debugHexes = true;
 //    return dictionary[keys[index]];
 //}
 function rgbToHexa(r, g, b) {
-    return "#" + ((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1);
+    return "#".concat(((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1));
 }
 function clamp(n, min, max) {
     return Math.max(min, Math.min(max, n));
@@ -388,20 +397,45 @@ function clearTempElements() {
 }
 function setTileGfx(element, tile) {
     switch (lens) {
+        case Lens.Humidity:
+            element.removeAttribute("class");
+            if (tile.water == true) {
+                element.setAttribute("fill", rgbToHexa(tile.humidity * 0, 250 - tile.humidity * 50, 250 - tile.humidity * 25));
+                element.setAttribute("stroke", rgbToHexa(250, 250, 250));
+                element.setAttribute("stroke-width", "1");
+            }
+            element.setAttribute("fill", rgbToHexa(tile.humidity * 0, 250 - tile.humidity * 50, 250 - tile.humidity * 25));
+            break;
         case Lens.Height:
             element.removeAttribute("class");
+            element.removeAttribute("stroke");
+            element.removeAttribute("stroke-width");
             element.setAttribute("fill", rgbToHexa(tile.height * 50, tile.height * 50, tile.height * 50));
+            break;
+        case Lens.Energy:
+            element.removeAttribute("class");
+            element.removeAttribute("stroke");
+            element.removeAttribute("stroke-width");
+            element.setAttribute("fill", rgbToHexa(0, 0, 0));
+            break;
+        case Lens.Toxicity:
+            element.removeAttribute("class");
+            element.removeAttribute("stroke");
+            element.removeAttribute("stroke-width");
+            element.setAttribute("fill", rgbToHexa(tile.toxicity * 3, tile.toxicity * 3, tile.toxicity * 3));
             break;
         case Lens.None:
             element.removeAttribute("fill");
+            element.removeAttribute("stroke");
+            element.removeAttribute("stroke-width");
             element.removeAttribute("class");
-            // type-specific style
+            // type-specific style - we need to work a bit on this
             if (tile.toxicity > toxicityThresholds[0]) {
                 var toxicityLevel = getToxicityLevel(tile.toxicity);
                 element.classList.add("toxic" + clamp(toxicityLevel, 1, 4));
             }
-            else if (tile.water > 0) {
-                element.classList.add("water" + clamp(tile.water, 1, 3));
+            else if (tile.humidity > 0) {
+                element.classList.add("humidity" + clamp(tile.humidity, 1, 5));
             }
             else {
                 element.classList.add("land" + randInt(1, 3));
@@ -436,15 +470,15 @@ function onHexHovered(hex) {
     clearTempElements();
     if (debugHexes) {
         var tile = hexmap.tiles[hexKey(hex.q, hex.r)];
-        var text = "(" + hex.q + "," + hex.r + ")";
+        var text = "(".concat(hex.q, ",").concat(hex.r, ")");
         if (tile.height > 0) {
-            text += " h:" + tile.height;
+            text += " h:".concat(tile.height);
         }
-        if (tile.water > 0) {
-            text += " w:" + tile.water;
+        if (tile.humidity > 0) {
+            text += " w:".concat(tile.humidity);
         }
         if (tile.toxicity > 0) {
-            text += " t:" + tile.toxicity;
+            text += " t:".concat(tile.toxicity);
         }
         var p = hexmap.layout.getPixel(hex.q, hex.r);
         var textElement = createTextElement(p.x, p.y, text);
@@ -455,7 +489,7 @@ function onHexHovered(hex) {
     // number the neighbours
     for (var dir = 0; dir < 6; dir++) {
         var neighbour = Hex.neighbor(hex, dir);
-        var neighbourText = "" + dir;
+        var neighbourText = "".concat(dir);
         var neighbourP = hexmap.layout.getPixel(neighbour.q, neighbour.r);
         var neighbourTextElement = createTextElement(neighbourP.x, neighbourP.y, neighbourText);
         neighbourTextElement.setAttribute("class", "debugText");
@@ -471,7 +505,7 @@ function onLineHovered(line) {
     clearTempElements();
     // number the neighbours
     getLineHexes(line).forEach(function (hex, index) {
-        var neighbourText = "" + index;
+        var neighbourText = "".concat(index);
         var neighbourP = hexmap.layout.getPixel(hex.q, hex.r);
         var neighbourTextElement = createTextElement(neighbourP.x, neighbourP.y, neighbourText);
         neighbourTextElement.setAttribute("class", "debugText");
@@ -485,7 +519,7 @@ function onCornerHovered(corner) {
     clearTempElements();
     // number the neighbours
     getCornerHexes(corner).forEach(function (hex, index) {
-        var neighbourText = "" + index;
+        var neighbourText = "".concat(index);
         var neighbourP = hexmap.layout.getPixel(hex.q, hex.r);
         var neighbourTextElement = createTextElement(neighbourP.x, neighbourP.y, neighbourText);
         neighbourTextElement.setAttribute("class", "debugText");
@@ -498,8 +532,10 @@ var TileData = /** @class */ (function () {
     function TileData() {
         this.coords = null;
         this.height = 0;
-        this.water = 0;
+        this.water = false; // If it is a water source or not
+        this.humidity = 0; // The humidity level of the tile 0 - 5
         this.toxicity = 0;
+        this.energy = 0;
     }
     TileData.toxicTile = function () {
         var tile = new TileData();
@@ -508,11 +544,13 @@ var TileData = /** @class */ (function () {
     };
     TileData.waterTile = function () {
         var tile = new TileData();
-        tile.water = randInt(1, 3);
+        tile.water = true;
+        tile.humidity = 5;
         return tile;
     };
     TileData.landTile = function () {
         var tile = new TileData();
+        tile.humidity = randInt(0, 5);
         return tile;
     };
     TileData.makeRandomTile = function () {
@@ -560,6 +598,36 @@ var HexMap = /** @class */ (function () {
             }
         }
     };
+    HexMap.prototype.addTextToElement = function (element, text) {
+        var textElement = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        textElement.setAttribute("x", "0");
+        textElement.setAttribute("y", "0");
+        textElement.setAttribute("text-anchor", "middle");
+        textElement.setAttribute("dominant-baseline", "middle");
+        textElement.setAttribute("font-size", "42");
+        textElement.setAttribute("fill", "white");
+        textElement.textContent = text;
+        element.appendChild(textElement);
+    };
+    HexMap.prototype.addTextToAllElements = function (text, property) {
+        for (var key in this.tileElements) {
+            var element = this.tileElements[key];
+            var textToAdd = this.tiles[key][property];
+            if (typeof this.tiles[key][property] == "number") {
+                textToAdd = Math.round(this.tiles[key][property]);
+            }
+            this.addTextToElement(element, textToAdd.toString());
+        }
+    };
+    HexMap.prototype.removeTextFromElement = function (element) {
+        element.querySelectorAll("text").forEach(function (e) { return e.remove(); });
+    };
+    HexMap.prototype.removeTextFromAllElements = function () {
+        for (var key in this.tileElements) {
+            var element = this.tileElements[key];
+            this.removeTextFromElement(element);
+        }
+    };
     HexMap.prototype.refreshGfx = function () {
         var _this = this;
         if (this.tileElements === undefined) {
@@ -576,7 +644,7 @@ var HexMap = /** @class */ (function () {
                 var tileElement = document.createElementNS("http://www.w3.org/2000/svg", "g");
                 tileElement.appendChild(polygon);
                 var p = this_1.layout.getPixel(hex.q, hex.r);
-                tileElement.setAttribute("transform", "translate(" + p.x + "," + p.y + ")");
+                tileElement.setAttribute("transform", "translate(".concat(p.x, ",").concat(p.y, ")"));
                 this_1.tileElements[hexKey(hex.q, hex.r)] = tileElement;
                 this_1.mapHtml.appendChild(tileElement);
             };
@@ -659,7 +727,7 @@ var HexMap = /** @class */ (function () {
         this.tileElements[hexKey(q, r)].classList.add("selected");
     };
     HexMap.prototype.setCamera = function (q, y, scale) {
-        this.mapHtml.setAttribute("transform", "translate(" + q + "," + y + ") scale(" + scale + ")");
+        this.mapHtml.setAttribute("transform", "translate(".concat(q, ",").concat(y, ") scale(").concat(scale, ")"));
     };
     ///> Adds the tile to the map and creates the lines and corners
     HexMap.prototype.addNewTile = function (q, r, tile) {
@@ -794,6 +862,7 @@ var Game = /** @class */ (function () {
         this.slectedPositionElement = document.getElementById("selected_position");
         this.selectedHeightElement = document.getElementById("selected_height");
         this.selectedWaterElement = document.getElementById("selected_water");
+        this.selectedHumidityElement = document.getElementById("selected_humidity");
         this.selectedToxicityElement = document.getElementById("selected_toxicity");
         document.getElementById("restart").onclick = function () { _this.resetState(); };
         document.getElementById("savegame").onclick = function () { _this.saveState(); };
@@ -839,7 +908,8 @@ window.onload = function () {
         game.selectedTypeElement.textContent = "Type: Hex";
         game.slectedPositionElement.textContent = "Position: " + hex.q + "," + hex.r + ",";
         game.selectedHeightElement.textContent = "Height: " + hexmap.tiles[hexKey(hex.q, hex.r)].height;
-        game.selectedWaterElement.textContent = "Water: " + hexmap.tiles[hexKey(hex.q, hex.r)].water;
+        game.selectedWaterElement.textContent = "Is Water source: " + hexmap.tiles[hexKey(hex.q, hex.r)].water;
+        game.selectedHumidityElement.textContent = "Humidity: " + hexmap.tiles[hexKey(hex.q, hex.r)].humidity;
         var tox = hexmap.tiles[hexKey(hex.q, hex.r)].toxicity;
         game.selectedToxicityElement.textContent = "Toxicity: " + getToxicityLevel(tox) + " (" + tox + ")";
     };
@@ -848,6 +918,7 @@ window.onload = function () {
         game.slectedPositionElement.textContent = "Position: " + line.q + "," + line.r + "," + line.dir;
         game.selectedHeightElement.textContent = "";
         game.selectedWaterElement.textContent = "";
+        game.selectedHumidityElement.textContent = "";
         game.selectedToxicityElement.textContent = "";
     };
     hexmap.onCornerClicked = function (corner) {
@@ -855,6 +926,7 @@ window.onload = function () {
         game.slectedPositionElement.textContent = "Position: " + corner.q + "," + corner.r + "," + corner.dir;
         game.selectedHeightElement.textContent = "";
         game.selectedWaterElement.textContent = "";
+        game.selectedHumidityElement.textContent = "";
         game.selectedToxicityElement.textContent = "";
     };
 };

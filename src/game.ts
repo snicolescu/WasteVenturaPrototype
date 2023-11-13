@@ -134,7 +134,10 @@ function cornerKey( q: number, r: number, dir: number) : number
 
 enum Lens {
     None,
-    Height
+    Height,
+    Humidity,
+    Energy,
+    Toxicity
 }
 
 let lens = Lens.None;
@@ -142,8 +145,15 @@ let lens = Lens.None;
 function setLens( button: HTMLInputElement)
 {
     Object.keys(Lens).forEach( key => { if (button.value == key) { lens = Lens[key]; } });
-
     hexmap.refreshGfx();
+    hexmap.addTextToAllElements( button.value, button.value.toLowerCase());
+}
+
+function removeLens()
+{
+    lens = Lens.None;
+    hexmap.refreshGfx();
+    hexmap.removeTextFromAllElements();
 }
 
 let debugHexes = true;
@@ -234,19 +244,44 @@ function clearTempElements() {
 function setTileGfx( element : Element, tile : TileData)
 {
     switch (lens) {
+        case Lens.Humidity:
+            element.removeAttribute("class");
+            if (tile.water == true) {
+                element.setAttribute("fill", rgbToHexa(tile.humidity * 0, 250 - tile.humidity * 50, 250 - tile.humidity * 25));
+                element.setAttribute("stroke", rgbToHexa(250, 250, 250));
+                element.setAttribute("stroke-width", "1");
+            }
+            element.setAttribute("fill", rgbToHexa(tile.humidity * 0, 250 - tile.humidity * 50, 250 - tile.humidity * 25));    
+            break;
         case Lens.Height:
             element.removeAttribute("class");
+            element.removeAttribute("stroke");
+            element.removeAttribute("stroke-width");
             element.setAttribute("fill", rgbToHexa(tile.height * 50, tile.height * 50, tile.height * 50));
+            break;
+        case Lens.Energy:
+            element.removeAttribute("class");
+            element.removeAttribute("stroke");
+            element.removeAttribute("stroke-width");
+            element.setAttribute("fill", rgbToHexa(0, 0, 0));
+            break;
+        case Lens.Toxicity:
+            element.removeAttribute("class");
+            element.removeAttribute("stroke");
+            element.removeAttribute("stroke-width");
+            element.setAttribute("fill", rgbToHexa(tile.toxicity * 3 , tile.toxicity * 3 , tile.toxicity * 3));
             break;
         case Lens.None:
             element.removeAttribute("fill");
+            element.removeAttribute("stroke");
+            element.removeAttribute("stroke-width");
             element.removeAttribute("class");
-            // type-specific style
+            // type-specific style - we need to work a bit on this
             if (tile.toxicity > toxicityThresholds[0]) {
                 let toxicityLevel = getToxicityLevel(tile.toxicity);
                 element.classList.add("toxic" + clamp(toxicityLevel, 1, 4));
-            } else if (tile.water > 0) {
-                element.classList.add("water" + clamp(tile.water, 1, 3));
+            } else if (tile.humidity> 0) {
+                element.classList.add("humidity" + clamp(tile.humidity, 1, 5));
             } else {
                 element.classList.add("land"+ randInt(1, 3));
             }
@@ -293,8 +328,8 @@ function onHexHovered(hex: Hex) {
         if (tile.height > 0) {
             text += ` h:${tile.height}`;
         }
-        if (tile.water > 0) {
-            text += ` w:${tile.water}`;
+        if (tile.humidity > 0) {
+            text += ` w:${tile.humidity}`;
         }
         if (tile.toxicity > 0) {
             text += ` t:${tile.toxicity}`;
@@ -360,10 +395,12 @@ function onCornerHovered(corner: Corner) {
 
 class TileData
 {
-    public coords   : Hex = null;
-    public height   : number = 0;
-    public water    : number = 0;
-    public toxicity : number = 0;
+    public coords       : Hex = null;
+    public height       : number = 0;
+    public water        : boolean = false;      // If it is a water source or not
+    public humidity     : number = 0;           // The humidity level of the tile 0 - 5
+    public toxicity     : number = 0;
+    public energy       : number = 0;
 
     static toxicTile() : TileData
     {
@@ -375,13 +412,15 @@ class TileData
     static waterTile() : TileData
     {
         let tile = new TileData();
-        tile.water = randInt(1,3);
+        tile.water = true;
+        tile.humidity = 5;
         return tile;
     }
 
     static landTile() : TileData
     {
         let tile = new TileData();
+        tile.humidity = randInt(0,5);
         return tile;
     }
 
@@ -440,6 +479,44 @@ class HexMap
                     this.addNewTile( x, y, TileData.makeRandomTile());
                 }
             }
+        }
+    }
+
+    addTextToElement(element: Element, text: string) // Adds text in the middle of an element
+    {
+        let textElement = document.createElementNS("http://www.w3.org/2000/svg", "text");
+        textElement.setAttribute("x", "0");
+        textElement.setAttribute("y", "0");
+        textElement.setAttribute("text-anchor", "middle");
+        textElement.setAttribute("dominant-baseline", "middle");
+        textElement.setAttribute("font-size", "42");
+        textElement.setAttribute("fill", "white");
+        textElement.textContent = text;
+        element.appendChild(textElement);
+    }
+
+    addTextToAllElements(text: string, property: string) // Adds selected property value to all elements in the middle
+    {
+        for (let key in this.tileElements) {
+            let element = this.tileElements[key];
+            let textToAdd = this.tiles[key][property];
+            if (typeof this.tiles[key][property] == "number") {
+                textToAdd = Math.round(this.tiles[key][property]);
+            }
+            this.addTextToElement(element, textToAdd.toString());
+        }
+    }
+
+    removeTextFromElement( element: Element) // Removes text from element
+    {
+        element.querySelectorAll("text").forEach( e => e.remove());
+    }
+
+    removeTextFromAllElements() // Removes text from all elements
+    {
+        for (let key in this.tileElements) {
+            let element = this.tileElements[key];
+            this.removeTextFromElement(element);
         }
     }
 
@@ -707,6 +784,7 @@ class Game
     slectedPositionElement : Element;
     selectedHeightElement : Element;
     selectedWaterElement : Element;
+    selectedHumidityElement : Element;
     selectedToxicityElement : Element;
 
     init() {
@@ -718,6 +796,7 @@ class Game
         this.slectedPositionElement = document.getElementById("selected_position");
         this.selectedHeightElement = document.getElementById("selected_height");
         this.selectedWaterElement = document.getElementById("selected_water");
+        this.selectedHumidityElement = document.getElementById("selected_humidity");
         this.selectedToxicityElement = document.getElementById("selected_toxicity");
 
         document.getElementById("restart").onclick = () => { this.resetState(); };
@@ -776,7 +855,8 @@ window.onload = function () {
         game.selectedTypeElement.textContent = "Type: Hex" 
         game.slectedPositionElement.textContent = "Position: " + hex.q + "," + hex.r + ",";
         game.selectedHeightElement.textContent = "Height: "     + hexmap.tiles[hexKey(hex.q,hex.r)].height;
-        game.selectedWaterElement.textContent = "Water: "       + hexmap.tiles[hexKey(hex.q,hex.r)].water;
+        game.selectedWaterElement.textContent = "Is Water source: "       + hexmap.tiles[hexKey(hex.q,hex.r)].water;
+        game.selectedHumidityElement.textContent = "Humidity: "       + hexmap.tiles[hexKey(hex.q,hex.r)].humidity;
         let tox = hexmap.tiles[hexKey(hex.q,hex.r)].toxicity;
         game.selectedToxicityElement.textContent = "Toxicity: " + getToxicityLevel(tox) + " (" + tox + ")";
     };
@@ -786,6 +866,7 @@ window.onload = function () {
     game.slectedPositionElement.textContent = "Position: " + line.q + "," + line.r + "," + line.dir;
     game.selectedHeightElement.textContent = "";
     game.selectedWaterElement.textContent = "";
+    game.selectedHumidityElement.textContent = ""
     game.selectedToxicityElement.textContent = "";
     };
 
@@ -794,6 +875,7 @@ window.onload = function () {
     game.slectedPositionElement.textContent = "Position: " + corner.q + "," + corner.r + "," + corner.dir;
     game.selectedHeightElement.textContent = "";
     game.selectedWaterElement.textContent = "";
+    game.selectedHumidityElement.textContent = ""
     game.selectedToxicityElement.textContent = "";
     };
 }
