@@ -318,7 +318,7 @@ function onSelectHex( hex: Hex) {
     hexmap.tileElements[hexKey(hex.q, hex.r)].classList.add("selected");
 }
 
-function onHexHovered(hex: Hex) {
+function onHexHovered(hex: Hex, debug: boolean = false) {
     clearTempElements();
     if (debugHexes) {
 
@@ -355,13 +355,16 @@ function onHexHovered(hex: Hex) {
     }
 
     hexmap.tileElements[hexKey(hex.q, hex.r)].classList.add("hover");
+    if (debug == false) {
+        clearTempElements();
+    }
 }
 
 function onHexUnhovered(hex: Hex) {
     hexmap.tileElements[hexKey(hex.q, hex.r)].classList.remove("hover");
 }
 
-function onLineHovered(line: Line) {
+function onLineHovered(line: Line, debug: boolean = false) {
     clearTempElements();
 
     // number the neighbours
@@ -375,9 +378,12 @@ function onLineHovered(line: Line) {
     });
     //BUG: Getting error hovering over edge lines
     hexmap.lineElements[lineKey(line.q, line.r, line.dir)].classList.add("line-hover");
+    if (debug == false) {
+        clearTempElements();
+    }
 }
 
-function onCornerHovered(corner: Corner) {
+function onCornerHovered(corner: Corner, debug: boolean = false) {
     clearTempElements();
 
     // number the neighbours
@@ -390,7 +396,11 @@ function onCornerHovered(corner: Corner) {
         tempElements.push(neighbourTextElement);
     });
     hexmap.cornerElements[lineKey(corner.q, corner.r, corner.dir)].classList.add("corner-hover");
+    if (debug == false) {
+        clearTempElements();
+    }
 }
+
 
 
 class TileData
@@ -447,6 +457,9 @@ class CornerData
 
 class HexMap
 {
+    // Debug
+    public debug: boolean = false;
+    
     // Game
     public mapRadius: number = 5;
     
@@ -530,9 +543,9 @@ class HexMap
                 let hex = tile.coords;
                 // tile hex
                 const polygon = createSmallHexElement();
-                polygon.onclick = () => { this.onHexClicked( hex); };
-                polygon.onmouseenter = () => { onHexHovered( hex); };
-                polygon.onmouseleave = () => { onHexUnhovered( hex); };
+                polygon.onclick = () => { this.onHexClicked(hex); };
+                polygon.onmouseenter = () => { onHexHovered(hex, this.debug); };
+                polygon.onmouseleave = () => { onHexUnhovered(hex); };
                 
                 // move everything toghether
                 const tileElement = document.createElementNS("http://www.w3.org/2000/svg", "g");
@@ -562,7 +575,7 @@ class HexMap
                     hexCenter.x + hexPoints[line.dir].x     , hexCenter.y + hexPoints[line.dir].y, 
                     hexCenter.x + hexPoints[line.dir + 1].x , hexCenter.y + hexPoints[line.dir + 1].y);
                 lineElement.onclick = () => { this.onLineClicked(line); };
-                lineElement.onmouseenter = () => { onLineHovered(line); };
+                lineElement.onmouseenter = () => { onLineHovered(line, this.debug); };
                 lineElement.onmouseleave = () => { lineElement.classList.remove("line-hover") };
 
                 this.lineElements[key] = lineElement;
@@ -586,7 +599,7 @@ class HexMap
                 let hexCenter = this.layout.getPixel( corner.q, corner.r);
                 let pointElement = createCircleElement( hexCenter.x + hexPoints[corner.dir].x, hexCenter.y + hexPoints[corner.dir].y, 10);
                 pointElement.onclick = () => { this.onCornerClicked( corner); };
-                pointElement.onmouseenter = () => { onCornerHovered( corner); };
+                pointElement.onmouseenter = () => { onCornerHovered( corner, this.debug); };
                 pointElement.onmouseleave = () => { pointElement.classList.remove("corner-hover") };
 
                 this.cornerElements[key] = pointElement;
@@ -802,10 +815,25 @@ class Game
         document.getElementById("restart").onclick = () => { this.resetState(); };
         document.getElementById("savegame").onclick = () => { this.saveState(); };
         document.getElementById("loadgame").onclick = () => { this.loadState(); };
+        document.getElementById("toggledebug").onclick = () => { this.toggleDebug(); };
 
         document.getElementById("nextturn").onclick = () => { this.nextTurn(); };
 
         this.loadState();
+    }
+
+    toggleDebug() {
+        if (hexmap.debug == true) {
+            hexmap.debug = false;
+            document.getElementById("toggledebug").setAttribute("style", "background-color: #c44600")
+            hexmap.refreshGfx();
+            
+        }
+        else {
+            hexmap.debug = true;
+            document.getElementById("toggledebug").setAttribute("style", "background-color: #00c46b")
+            hexmap.refreshGfx();
+        }
     }
 
     clicked( q:number, r:number) {

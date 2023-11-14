@@ -466,7 +466,8 @@ function setCornerGfx(element, corner) {
 function onSelectHex(hex) {
     hexmap.tileElements[hexKey(hex.q, hex.r)].classList.add("selected");
 }
-function onHexHovered(hex) {
+function onHexHovered(hex, debug) {
+    if (debug === void 0) { debug = false; }
     clearTempElements();
     if (debugHexes) {
         var tile = hexmap.tiles[hexKey(hex.q, hex.r)];
@@ -497,11 +498,15 @@ function onHexHovered(hex) {
         tempElements.push(neighbourTextElement);
     }
     hexmap.tileElements[hexKey(hex.q, hex.r)].classList.add("hover");
+    if (debug == false) {
+        clearTempElements();
+    }
 }
 function onHexUnhovered(hex) {
     hexmap.tileElements[hexKey(hex.q, hex.r)].classList.remove("hover");
 }
-function onLineHovered(line) {
+function onLineHovered(line, debug) {
+    if (debug === void 0) { debug = false; }
     clearTempElements();
     // number the neighbours
     getLineHexes(line).forEach(function (hex, index) {
@@ -514,8 +519,12 @@ function onLineHovered(line) {
     });
     //BUG: Getting error hovering over edge lines
     hexmap.lineElements[lineKey(line.q, line.r, line.dir)].classList.add("line-hover");
+    if (debug == false) {
+        clearTempElements();
+    }
 }
-function onCornerHovered(corner) {
+function onCornerHovered(corner, debug) {
+    if (debug === void 0) { debug = false; }
     clearTempElements();
     // number the neighbours
     getCornerHexes(corner).forEach(function (hex, index) {
@@ -527,6 +536,9 @@ function onCornerHovered(corner) {
         tempElements.push(neighbourTextElement);
     });
     hexmap.cornerElements[lineKey(corner.q, corner.r, corner.dir)].classList.add("corner-hover");
+    if (debug == false) {
+        clearTempElements();
+    }
 }
 var TileData = /** @class */ (function () {
     function TileData() {
@@ -577,6 +589,8 @@ var CornerData = /** @class */ (function () {
 }());
 var HexMap = /** @class */ (function () {
     function HexMap() {
+        // Debug
+        this.debug = false;
         // Game
         this.mapRadius = 5;
         this.tiles = {};
@@ -638,7 +652,7 @@ var HexMap = /** @class */ (function () {
                 // tile hex
                 var polygon = createSmallHexElement();
                 polygon.onclick = function () { _this.onHexClicked(hex); };
-                polygon.onmouseenter = function () { onHexHovered(hex); };
+                polygon.onmouseenter = function () { onHexHovered(hex, _this.debug); };
                 polygon.onmouseleave = function () { onHexUnhovered(hex); };
                 // move everything toghether
                 var tileElement = document.createElementNS("http://www.w3.org/2000/svg", "g");
@@ -666,7 +680,7 @@ var HexMap = /** @class */ (function () {
                 var hexCenter = this_2.layout.getPixel(line.q, line.r);
                 var lineElement = createLineElement(hexCenter.x + hexPoints[line.dir].x, hexCenter.y + hexPoints[line.dir].y, hexCenter.x + hexPoints[line.dir + 1].x, hexCenter.y + hexPoints[line.dir + 1].y);
                 lineElement.onclick = function () { _this.onLineClicked(line); };
-                lineElement.onmouseenter = function () { onLineHovered(line); };
+                lineElement.onmouseenter = function () { onLineHovered(line, _this.debug); };
                 lineElement.onmouseleave = function () { lineElement.classList.remove("line-hover"); };
                 this_2.lineElements[key] = lineElement;
                 this_2.mapHtml.appendChild(lineElement);
@@ -689,7 +703,7 @@ var HexMap = /** @class */ (function () {
                 var hexCenter = this_3.layout.getPixel(corner.q, corner.r);
                 var pointElement = createCircleElement(hexCenter.x + hexPoints[corner.dir].x, hexCenter.y + hexPoints[corner.dir].y, 10);
                 pointElement.onclick = function () { _this.onCornerClicked(corner); };
-                pointElement.onmouseenter = function () { onCornerHovered(corner); };
+                pointElement.onmouseenter = function () { onCornerHovered(corner, _this.debug); };
                 pointElement.onmouseleave = function () { pointElement.classList.remove("corner-hover"); };
                 this_3.cornerElements[key] = pointElement;
                 this_3.mapHtml.appendChild(pointElement);
@@ -867,8 +881,21 @@ var Game = /** @class */ (function () {
         document.getElementById("restart").onclick = function () { _this.resetState(); };
         document.getElementById("savegame").onclick = function () { _this.saveState(); };
         document.getElementById("loadgame").onclick = function () { _this.loadState(); };
+        document.getElementById("toggledebug").onclick = function () { _this.toggleDebug(); };
         document.getElementById("nextturn").onclick = function () { _this.nextTurn(); };
         this.loadState();
+    };
+    Game.prototype.toggleDebug = function () {
+        if (hexmap.debug == true) {
+            hexmap.debug = false;
+            document.getElementById("toggledebug").setAttribute("style", "background-color: #c44600");
+            hexmap.refreshGfx();
+        }
+        else {
+            hexmap.debug = true;
+            document.getElementById("toggledebug").setAttribute("style", "background-color: #00c46b");
+            hexmap.refreshGfx();
+        }
     };
     Game.prototype.clicked = function (q, r) {
         this.clicks++;
