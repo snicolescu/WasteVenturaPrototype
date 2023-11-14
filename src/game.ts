@@ -746,6 +746,39 @@ class CitizensList
     }
 }
 
+class Resources
+{
+    polymers: number = 0;
+    metals: number = 0;
+    minerals: number = 0;
+    waste: number = 0;
+
+    addAmount(resource: string, amount: number) {
+        this[resource] += amount;
+    }
+
+    moveAmount(other: Resources, resource: string, amount: number) {
+        if (this[resource] >= amount) {
+            this[resource] -= amount;
+            other[resource] += amount;
+        }
+    }
+
+    moveAll(other: Resources) {
+        this.moveAmount(other, "polymers", this.polymers);
+        this.moveAmount(other, "metals", this.metals);
+        this.moveAmount(other, "minerals", this.minerals);
+        this.moveAmount(other, "waste", this.waste);
+    }
+
+    refreshGfx() {
+        document.getElementById("polymersLabel").textContent = "Polymers: " + this.polymers.toString();
+        document.getElementById("metalsLabel").textContent = "Metals: " + this.metals.toString();
+        document.getElementById("mineralsLabel").textContent = "Minerals: " + this.minerals.toString();
+        document.getElementById("wasteLabel").textContent = "Waste: " + this.waste.toString();
+    }
+}
+
 class Game
 {
     constructor() {
@@ -867,6 +900,7 @@ class Game
 let game = new Game;
 let hexmap = new HexMap;
 let citizensList = new CitizensList;
+let resources = new Resources;
 
 var selectedTile:number[] = [0,0]; // Need to remember selected tile
 
@@ -875,6 +909,10 @@ window.onload = function () {
     console.log("Loaded");
 
     game.init();
+    
+    resources.addAmount("polymers", 100);
+    resources.addAmount("metals", 125);
+    resources.refreshGfx();
 
     hexmap.onHexClicked = (hex: Hex) => { 
         selectedTile = [ hex.q ,hex.r];

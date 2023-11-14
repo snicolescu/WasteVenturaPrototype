@@ -828,6 +828,36 @@ var CitizensList = /** @class */ (function () {
     };
     return CitizensList;
 }());
+var Resources = /** @class */ (function () {
+    function Resources() {
+        this.polymers = 0;
+        this.metals = 0;
+        this.minerals = 0;
+        this.waste = 0;
+    }
+    Resources.prototype.addAmount = function (resource, amount) {
+        this[resource] += amount;
+    };
+    Resources.prototype.moveAmount = function (other, resource, amount) {
+        if (this[resource] >= amount) {
+            this[resource] -= amount;
+            other[resource] += amount;
+        }
+    };
+    Resources.prototype.moveAll = function (other) {
+        this.moveAmount(other, "polymers", this.polymers);
+        this.moveAmount(other, "metals", this.metals);
+        this.moveAmount(other, "minerals", this.minerals);
+        this.moveAmount(other, "waste", this.waste);
+    };
+    Resources.prototype.refreshGfx = function () {
+        document.getElementById("polymersLabel").textContent = "Polymers: " + this.polymers.toString();
+        document.getElementById("metalsLabel").textContent = "Metals: " + this.metals.toString();
+        document.getElementById("mineralsLabel").textContent = "Minerals: " + this.minerals.toString();
+        document.getElementById("wasteLabel").textContent = "Waste: " + this.waste.toString();
+    };
+    return Resources;
+}());
 var Game = /** @class */ (function () {
     function Game() {
         this.clicks = 0;
@@ -925,10 +955,14 @@ var Game = /** @class */ (function () {
 var game = new Game;
 var hexmap = new HexMap;
 var citizensList = new CitizensList;
+var resources = new Resources;
 var selectedTile = [0, 0]; // Need to remember selected tile
 window.onload = function () {
     console.log("Loaded");
     game.init();
+    resources.addAmount("polymers", 100);
+    resources.addAmount("metals", 125);
+    resources.refreshGfx();
     hexmap.onHexClicked = function (hex) {
         selectedTile = [hex.q, hex.r];
         hexmap.selectHex(hex.q, hex.r);
