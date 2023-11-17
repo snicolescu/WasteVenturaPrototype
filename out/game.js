@@ -187,6 +187,17 @@ var Layout = /** @class */ (function () {
 }());
 /// <reference path="./hex.ts" />
 /*
+TODO:
+    citizen activities
+        clear toxicity
+        build
+        harvest
+
+    spawn small number of toxic and water tiles
+    add UI for tooltips
+    add building logic
+        choose citizen to build
+
 Game
 - build waterways on edges
 - water flowing logic
@@ -203,17 +214,32 @@ UI
 var citizenNames = ["Cerbu", "Ioan", "Iulia", "Edi", "Silvia", "Sick", "Adi", "Andu", "Mihai", "Dan", "Vlad"];
 var toxicityThresholds = [10, 20, 35, 55, 80];
 var toxicityPerTurn = 0.2; // how much toxicity is spread by toxic tiles. multiplied by their toxicity level
-var LineBuildings;
-(function (LineBuildings) {
-    LineBuildings[LineBuildings["Empty"] = 0] = "Empty";
-    LineBuildings[LineBuildings["Waterway"] = 1] = "Waterway";
-})(LineBuildings || (LineBuildings = {}));
+var LineBuilding;
+(function (LineBuilding) {
+    LineBuilding[LineBuilding["Empty"] = 0] = "Empty";
+    LineBuilding[LineBuilding["Waterway"] = 1] = "Waterway";
+})(LineBuilding || (LineBuilding = {}));
 ;
-var CornerBuildings;
-(function (CornerBuildings) {
-    CornerBuildings[CornerBuildings["Empty"] = 0] = "Empty";
-    CornerBuildings[CornerBuildings["PowerPoint"] = 1] = "PowerPoint"; //Hehe
-})(CornerBuildings || (CornerBuildings = {}));
+var CornerBuilding;
+(function (CornerBuilding) {
+    CornerBuilding[CornerBuilding["Empty"] = 0] = "Empty";
+    CornerBuilding[CornerBuilding["PowerPoint"] = 1] = "PowerPoint"; //Hehe
+})(CornerBuilding || (CornerBuilding = {}));
+;
+var TileBuilding;
+(function (TileBuilding) {
+    TileBuilding[TileBuilding["Empty"] = 0] = "Empty";
+    TileBuilding[TileBuilding["Greenhouse"] = 1] = "Greenhouse";
+})(TileBuilding || (TileBuilding = {}));
+;
+var CitizenAction;
+(function (CitizenAction) {
+    CitizenAction[CitizenAction["Idle"] = 0] = "Idle";
+    CitizenAction[CitizenAction["ClearToxicity"] = 1] = "ClearToxicity";
+    CitizenAction[CitizenAction["Build"] = 2] = "Build";
+    CitizenAction[CitizenAction["Harvest"] = 3] = "Harvest";
+    CitizenAction[CitizenAction["Count"] = 4] = "Count";
+})(CitizenAction || (CitizenAction = {}));
 ;
 function getToxicityLevel(toxicity) {
     for (var i = 0; i < toxicityThresholds.length; i++) {
@@ -329,6 +355,21 @@ function removeLens() {
     hexmap.removeTextFromAllElements();
 }
 var debugHexes = true;
+var ChangeActionFlow = /** @class */ (function () {
+    function ChangeActionFlow() {
+        this.dude = null;
+        this.target = null;
+        this.targetFilter = null;
+        this.onStart = null;
+        this.onConfirm = null;
+        this.onCancel = null;
+    }
+    ChangeActionFlow.justHexes = function (target) {
+        return target instanceof Hex;
+    };
+    return ChangeActionFlow;
+}());
+var currentAction = null;
 // Helper functions
 //function getRandomElement<Type>(dictionary: { [key: number]: Type; } ) : Type
 //{
@@ -337,7 +378,7 @@ var debugHexes = true;
 //    return dictionary[keys[index]];
 //}
 function rgbToHexa(r, g, b) {
-    return "#".concat(((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1));
+    return "#" + ((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1);
 }
 function clamp(n, min, max) {
     return Math.max(min, Math.min(max, n));
@@ -390,6 +431,15 @@ function createCircleElement(x, y, radius) {
     return pointElement;
 }
 // HTML helpers
+function addDropdownChild(parent, label, callback) {
+    var dropdownItem1 = document.createElement("a");
+    dropdownItem1.classList.add("dropdown-item");
+    dropdownItem1.href = "#";
+    dropdownItem1.textContent = label;
+    dropdownItem1.onclick = callback;
+    parent.appendChild(dropdownItem1);
+}
+//UI stuff
 var tempElements = [];
 function clearTempElements() {
     tempElements.forEach(function (e) { return e.remove(); });
@@ -445,20 +495,20 @@ function setTileGfx(element, tile) {
 }
 function setLineGfx(element, line) {
     switch (line.built) {
-        case LineBuildings.Empty:
+        case LineBuilding.Empty:
             element.setAttribute("class", "line-empty");
             break;
-        case LineBuildings.Waterway:
+        case LineBuilding.Waterway:
             element.setAttribute("class", "line-waterway");
             break;
     }
 }
 function setCornerGfx(element, corner) {
     switch (corner.built) {
-        case CornerBuildings.Empty:
+        case CornerBuilding.Empty:
             element.setAttribute("class", "corner-empty");
             break;
-        case CornerBuildings.PowerPoint:
+        case CornerBuilding.PowerPoint:
             element.setAttribute("class", "corner-power");
             break;
     }
@@ -471,15 +521,15 @@ function onHexHovered(hex, debug) {
     clearTempElements();
     if (debugHexes) {
         var tile = hexmap.tiles[hexKey(hex.q, hex.r)];
-        var text = "(".concat(hex.q, ",").concat(hex.r, ")");
+        var text = "(" + hex.q + "," + hex.r + ")";
         if (tile.height > 0) {
-            text += " h:".concat(tile.height);
+            text += " h:" + tile.height;
         }
         if (tile.humidity > 0) {
-            text += " w:".concat(tile.humidity);
+            text += " w:" + tile.humidity;
         }
         if (tile.toxicity > 0) {
-            text += " t:".concat(tile.toxicity);
+            text += " t:" + tile.toxicity;
         }
         var p = hexmap.layout.getPixel(hex.q, hex.r);
         var textElement = createTextElement(p.x, p.y, text);
@@ -490,7 +540,7 @@ function onHexHovered(hex, debug) {
     // number the neighbours
     for (var dir = 0; dir < 6; dir++) {
         var neighbour = Hex.neighbor(hex, dir);
-        var neighbourText = "".concat(dir);
+        var neighbourText = "" + dir;
         var neighbourP = hexmap.layout.getPixel(neighbour.q, neighbour.r);
         var neighbourTextElement = createTextElement(neighbourP.x, neighbourP.y, neighbourText);
         neighbourTextElement.setAttribute("class", "debugText");
@@ -510,7 +560,7 @@ function onLineHovered(line, debug) {
     clearTempElements();
     // number the neighbours
     getLineHexes(line).forEach(function (hex, index) {
-        var neighbourText = "".concat(index);
+        var neighbourText = "" + index;
         var neighbourP = hexmap.layout.getPixel(hex.q, hex.r);
         var neighbourTextElement = createTextElement(neighbourP.x, neighbourP.y, neighbourText);
         neighbourTextElement.setAttribute("class", "debugText");
@@ -528,7 +578,7 @@ function onCornerHovered(corner, debug) {
     clearTempElements();
     // number the neighbours
     getCornerHexes(corner).forEach(function (hex, index) {
-        var neighbourText = "".concat(index);
+        var neighbourText = "" + index;
         var neighbourP = hexmap.layout.getPixel(hex.q, hex.r);
         var neighbourTextElement = createTextElement(neighbourP.x, neighbourP.y, neighbourText);
         neighbourTextElement.setAttribute("class", "debugText");
@@ -576,14 +626,14 @@ var TileData = /** @class */ (function () {
 var LineData = /** @class */ (function () {
     function LineData() {
         this.coords = null;
-        this.built = LineBuildings.Empty;
+        this.built = LineBuilding.Empty;
     }
     return LineData;
 }());
 var CornerData = /** @class */ (function () {
     function CornerData() {
         this.coords = null;
-        this.built = CornerBuildings.Empty;
+        this.built = CornerBuilding.Empty;
     }
     return CornerData;
 }());
@@ -658,7 +708,7 @@ var HexMap = /** @class */ (function () {
                 var tileElement = document.createElementNS("http://www.w3.org/2000/svg", "g");
                 tileElement.appendChild(polygon);
                 var p = this_1.layout.getPixel(hex.q, hex.r);
-                tileElement.setAttribute("transform", "translate(".concat(p.x, ",").concat(p.y, ")"));
+                tileElement.setAttribute("transform", "translate(" + p.x + "," + p.y + ")");
                 this_1.tileElements[hexKey(hex.q, hex.r)] = tileElement;
                 this_1.mapHtml.appendChild(tileElement);
             };
@@ -741,7 +791,7 @@ var HexMap = /** @class */ (function () {
         this.tileElements[hexKey(q, r)].classList.add("selected");
     };
     HexMap.prototype.setCamera = function (q, y, scale) {
-        this.mapHtml.setAttribute("transform", "translate(".concat(q, ",").concat(y, ") scale(").concat(scale, ")"));
+        this.mapHtml.setAttribute("transform", "translate(" + q + "," + y + ") scale(" + scale + ")");
     };
     ///> Adds the tile to the map and creates the lines and corners
     HexMap.prototype.addNewTile = function (q, r, tile) {
@@ -784,7 +834,8 @@ var Citizen = /** @class */ (function () {
     function Citizen() {
         this.name = "ph_name";
         this.assignedTile = null;
-        this.status = true;
+        this.chosenAction = CitizenAction.Idle;
+        this.actionStuff = null; // this will hold info about the status of build actions
     }
     return Citizen;
 }());
@@ -809,21 +860,86 @@ var CitizensList = /** @class */ (function () {
             this.citizens.push(citizen);
         }
     };
+    CitizensList.prototype.doCitizensTurn = function () {
+        for (var i = 0; i < this.citizens.length; i++) {
+            var citizen = this.citizens[i];
+            switch (citizen.chosenAction) {
+                case CitizenAction.Idle:
+                    break;
+                case CitizenAction.ClearToxicity:
+                    if (citizen.assignedTile) {
+                        var tile = hexmap.tiles[hexKey(citizen.assignedTile.q, citizen.assignedTile.r)];
+                        if (tile.toxicity > 0) {
+                            tile.toxicity = Math.max(tile.toxicity - toxicityPerTurn * 10, 0);
+                        }
+                    }
+                    break;
+                case CitizenAction.Build:
+                    //TODO: Add work to building
+                    break;
+                case CitizenAction.Harvest:
+                    //TODO: Generate stuff based on assigned tile
+                    break;
+            }
+        }
+    };
     CitizensList.prototype.refreshGfx = function () {
+        //TODO: Don't rebuild every frame
+        var _this = this;
         // clearTable
         for (var i = 0; i < this.citizens.length; i++) {
             this.table.deleteRow(-1);
         }
-        // fill it based on citizens
-        for (var i = 0; i < this.citizens.length; i++) {
-            var citizen = this.citizens[i];
-            var row = this.table.insertRow(-1);
+        var _loop_4 = function (i) {
+            var citizen = this_4.citizens[i];
+            var row = this_4.table.insertRow(-1);
             var cell1 = row.insertCell(0);
             var cell2 = row.insertCell(1);
             var cell3 = row.insertCell(2);
             cell1.innerHTML = citizen.name;
             cell2.innerHTML = citizen.assignedTile ? citizen.assignedTile[0] + "," + citizen.assignedTile[1] : "Idle";
-            cell3.innerHTML = citizen.status ? "Alive" : "Dead";
+            cell3.innerHTML = "Alive"; // status used to go here
+            // action stuff
+            var actionCell = row.insertCell(3);
+            var container = document.createElement("div");
+            container.classList.add("btn-group");
+            actionCell.appendChild(container);
+            var actionButton = document.createElement("button");
+            actionButton.type = "button";
+            actionButton.classList.add("btn", "btn-primary", "btn-sm");
+            actionButton.textContent = CitizenAction[citizen.chosenAction].toString();
+            container.appendChild(actionButton);
+            var dropdownButton = document.createElement("button");
+            dropdownButton.type = "button";
+            dropdownButton.classList.add("btn", "btn-primary", "btn-sm", "dropdown-toggle", "dropdown-toggle-split");
+            dropdownButton.dataset.toggle = "dropdown";
+            dropdownButton.setAttribute("aria-haspopup", "true");
+            dropdownButton.setAttribute("aria-expanded", "false");
+            container.appendChild(dropdownButton);
+            var dropdownSpan = document.createElement("span");
+            dropdownSpan.classList.add("sr-only");
+            dropdownSpan.textContent = "Toggle Dropdown";
+            dropdownButton.appendChild(dropdownSpan);
+            var dropdownMenu = document.createElement("div");
+            dropdownMenu.classList.add("dropdown-menu");
+            container.appendChild(dropdownMenu);
+            var _loop_5 = function (j) {
+                if (j == citizen.chosenAction)
+                    return "continue";
+                addDropdownChild(dropdownMenu, CitizenAction[j], function () {
+                    citizen.chosenAction = j;
+                    //TODO: Set action choose target state
+                    _this.refreshGfx();
+                });
+            };
+            for (var j = 0; j < CitizenAction.Count; j++) {
+                _loop_5(j);
+            }
+        };
+        var this_4 = this;
+        // fill it based on citizens
+        for (var i = 0; i < this.citizens.length; i++) {
+            _loop_4(i);
         }
     };
     return CitizensList;

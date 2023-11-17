@@ -1,6 +1,17 @@
 /// <reference path="./hex.ts" />
 
 /* 
+TODO:
+    citizen activities
+        clear toxicity
+        build
+        harvest
+
+    spawn small number of toxic and water tiles
+    add UI for tooltips
+    add building logic
+        choose citizen to build
+
 Game
 - build waterways on edges
 - water flowing logic
@@ -21,14 +32,27 @@ const citizenNames: string[] = ["Cerbu", "Ioan", "Iulia", "Edi", "Silvia", "Sick
 const toxicityThresholds = [10, 20, 35, 55, 80];
 const toxicityPerTurn = 0.2; // how much toxicity is spread by toxic tiles. multiplied by their toxicity level
 
-enum LineBuildings {
+enum LineBuilding {
     Empty,
     Waterway
 };
 
-enum CornerBuildings {
+enum CornerBuilding {
     Empty,
     PowerPoint //Hehe
+};
+
+enum TileBuilding {
+    Empty,
+    Greenhouse
+};
+
+enum CitizenAction {
+    Idle,
+    ClearToxicity,
+    Build,
+    Harvest,
+    Count
 };
 
 function getToxicityLevel( toxicity: number) : number {
@@ -158,6 +182,22 @@ function removeLens()
 
 let debugHexes = true;
 
+class ChangeActionFlow
+{
+    public dude? : Citizen = null;
+    public target? : Hex | Line | Corner = null;
+    public targetFilter : ( target: Hex | Line | Corner) => boolean = null;
+    public onStart : () => void = null;
+    public onConfirm : (target: Hex | Line | Corner) => void = null;
+    public onCancel : () => void = null;
+
+    public static justHexes( target: Hex | Line | Corner) : boolean {
+        return target instanceof Hex;
+    }
+}
+
+let currentAction : ChangeActionFlow = null;
+
 // Helper functions
 
 //function getRandomElement<Type>(dictionary: { [key: number]: Type; } ) : Type
@@ -234,6 +274,16 @@ function createCircleElement( x: number, y: number, radius :number) {
 
 // HTML helpers
 
+function addDropdownChild( parent: Element, label: string, callback: () => void) {
+    let dropdownItem1 = document.createElement("a");
+    dropdownItem1.classList.add("dropdown-item");
+    dropdownItem1.href = "#";
+    dropdownItem1.textContent = label;
+    dropdownItem1.onclick = callback;
+    parent.appendChild(dropdownItem1);
+}
+
+//UI stuff
 let tempElements : Element[] = [];
 
 function clearTempElements() {
@@ -293,10 +343,10 @@ function setTileGfx( element : Element, tile : TileData)
 function setLineGfx( element : Element, line : LineData)
 {
     switch (line.built) {
-        case LineBuildings.Empty:
+        case LineBuilding.Empty:
             element.setAttribute("class", "line-empty");
             break;
-        case LineBuildings.Waterway:
+        case LineBuilding.Waterway:
             element.setAttribute("class", "line-waterway");
             break;
     }
@@ -305,10 +355,10 @@ function setLineGfx( element : Element, line : LineData)
 function setCornerGfx( element : Element, corner : CornerData)
 {
     switch (corner.built) {
-        case CornerBuildings.Empty:
+        case CornerBuilding.Empty:
             element.setAttribute("class", "corner-empty");
             break;
-        case CornerBuildings.PowerPoint:
+        case CornerBuilding.PowerPoint:
             element.setAttribute("class", "corner-power");
             break;
     }
@@ -446,13 +496,13 @@ class TileData
 class LineData
 {
     coords: Line = null;
-    built : LineBuildings = LineBuildings.Empty;
+    built : LineBuilding = LineBuilding.Empty;
 }
 
 class CornerData
 {
     coords: Line = null;
-    built : CornerBuildings = CornerBuildings.Empty;
+    built : CornerBuilding = CornerBuilding.Empty;
 }
 
 class HexMap
@@ -690,8 +740,9 @@ class HexMap
 class Citizen
 {
     name: string = "ph_name";
-    assignedTile: number[] = null;
-    status: boolean = true;
+    assignedTile: Hex = null;
+    chosenAction: CitizenAction = CitizenAction.Idle;
+    actionStuff: any = null; // this will hold info about the status of build actions
 }
 
 class CitizensList
@@ -727,7 +778,33 @@ class CitizensList
         }
     }
 
+    doCitizensTurn() {
+        for (let i = 0; i < this.citizens.length; i++) {
+            let citizen = this.citizens[i];
+            switch ( citizen.chosenAction) {
+                case CitizenAction.Idle:
+                    break;
+                case CitizenAction.ClearToxicity:
+                    if (citizen.assignedTile) {
+                        let tile = hexmap.tiles[hexKey(citizen.assignedTile.q, citizen.assignedTile.r)];
+                        if (tile.toxicity > 0) {
+                            tile.toxicity = Math.max( tile.toxicity - toxicityPerTurn * 10 , 0);
+                        }
+                    }
+                    break;
+                case CitizenAction.Build:
+                    //TODO: Add work to building
+                    break;
+                case CitizenAction.Harvest:
+                    //TODO: Generate stuff based on assigned tile
+                    break;
+            }
+        }
+    }
+
     refreshGfx() {
+        //TODO: Don't rebuild every frame
+
         // clearTable
         for (let i = 0; i < this.citizens.length; i++) {
             this.table.deleteRow(-1);
@@ -739,9 +816,54 @@ class CitizensList
             let cell1 = row.insertCell(0);
             let cell2 = row.insertCell(1);
             let cell3 = row.insertCell(2);
+
             cell1.innerHTML = citizen.name;
             cell2.innerHTML = citizen.assignedTile ? citizen.assignedTile[0] + "," + citizen.assignedTile[1] : "Idle";
-            cell3.innerHTML = citizen.status ? "Alive" : "Dead";
+            cell3.innerHTML = "Alive"; // status used to go here
+
+            // action stuff
+            let actionCell = row.insertCell(3);
+
+            let container = document.createElement("div");
+            container.classList.add("btn-group");
+            actionCell.appendChild(container);
+
+            let actionButton = document.createElement("button");
+            actionButton.type = "button";
+            actionButton.classList.add("btn", "btn-primary", "btn-sm");
+            actionButton.textContent = CitizenAction[citizen.chosenAction].toString();
+            container.appendChild(actionButton);
+
+            let dropdownButton = document.createElement("button");
+            dropdownButton.type = "button";
+            dropdownButton.classList.add("btn", "btn-primary", "btn-sm", "dropdown-toggle", "dropdown-toggle-split");
+            dropdownButton.dataset.toggle = "dropdown";
+            dropdownButton.setAttribute("aria-haspopup", "true");
+            dropdownButton.setAttribute("aria-expanded", "false");
+            container.appendChild(dropdownButton);
+
+            let dropdownSpan = document.createElement("span");
+            dropdownSpan.classList.add("sr-only");
+            dropdownSpan.textContent = "Toggle Dropdown";
+            dropdownButton.appendChild(dropdownSpan);
+
+            let dropdownMenu = document.createElement("div");
+            dropdownMenu.classList.add("dropdown-menu");
+            container.appendChild(dropdownMenu);
+
+            for (let j = 0; j < CitizenAction.Count; j++) {
+                if (j == citizen.chosenAction)
+                    continue;
+                addDropdownChild(dropdownMenu, CitizenAction[j], () => { 
+                    citizen.chosenAction = j;
+                    //TODO: Set action choose target state
+
+                    this.refreshGfx(); 
+                });
+            }
+
+            //let dropdownDivider = document.createElement("div");
+            //dropdownDivider.classList.add("dropdown-divider");
         }
     }
 }
