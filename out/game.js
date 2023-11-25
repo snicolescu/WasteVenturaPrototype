@@ -188,10 +188,19 @@ var Layout = /** @class */ (function () {
 /// <reference path="./hex.ts" />
 /*
 TODO:
+    action choosing flow
+        pick element
+        pick activity (build, clear, harvest)
+            separate button for each build type
+        pick citizen
+        confirm if not idle
+
     citizen activities
         clear toxicity
         build
         harvest
+
+
 
     spawn small number of toxic and water tiles
     add UI for tooltips
@@ -354,15 +363,17 @@ function removeLens() {
     hexmap.refreshGfx();
     hexmap.removeTextFromAllElements();
 }
-var debugHexes = true;
+var debugHexes = false;
 var ChangeActionFlow = /** @class */ (function () {
-    function ChangeActionFlow() {
+    function ChangeActionFlow(action) {
         this.dude = null;
         this.target = null;
-        this.targetFilter = null;
+        this.action = CitizenAction.Idle;
+        this.targetIsOK = null; // return true if it's a valid target
         this.onStart = null;
         this.onConfirm = null;
         this.onCancel = null;
+        this.action = action;
     }
     ChangeActionFlow.justHexes = function (target) {
         return target instanceof Hex;
@@ -370,6 +381,7 @@ var ChangeActionFlow = /** @class */ (function () {
     return ChangeActionFlow;
 }());
 var currentAction = null;
+var selectedTile = [0, 0]; // Need to remember selected tile
 // Helper functions
 //function getRandomElement<Type>(dictionary: { [key: number]: Type; } ) : Type
 //{
@@ -378,7 +390,7 @@ var currentAction = null;
 //    return dictionary[keys[index]];
 //}
 function rgbToHexa(r, g, b) {
-    return "#".concat(((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1));
+    return "#" + ((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1);
 }
 function clamp(n, min, max) {
     return Math.max(min, Math.min(max, n));
@@ -516,79 +528,108 @@ function setCornerGfx(element, corner) {
 function onSelectHex(hex) {
     hexmap.tileElements[hexKey(hex.q, hex.r)].classList.add("selected");
 }
-function onHexHovered(hex, debug) {
-    if (debug === void 0) { debug = false; }
+function onHexHovered(hex) {
     clearTempElements();
     if (debugHexes) {
         var tile = hexmap.tiles[hexKey(hex.q, hex.r)];
-        var text = "(".concat(hex.q, ",").concat(hex.r, ")");
+        var text = "(" + hex.q + "," + hex.r + ")";
         if (tile.height > 0) {
-            text += " h:".concat(tile.height);
+            text += " h:" + tile.height;
         }
         if (tile.humidity > 0) {
-            text += " w:".concat(tile.humidity);
+            text += " w:" + tile.humidity;
         }
         if (tile.toxicity > 0) {
-            text += " t:".concat(tile.toxicity);
+            text += " t:" + tile.toxicity;
         }
         var p = hexmap.layout.getPixel(hex.q, hex.r);
         var textElement = createTextElement(p.x, p.y, text);
         textElement.setAttribute("class", "debugText");
         hexmap.mapHtml.appendChild(textElement);
         tempElements.push(textElement);
-    }
-    // number the neighbours
-    for (var dir = 0; dir < 6; dir++) {
-        var neighbour = Hex.neighbor(hex, dir);
-        var neighbourText = "".concat(dir);
-        var neighbourP = hexmap.layout.getPixel(neighbour.q, neighbour.r);
-        var neighbourTextElement = createTextElement(neighbourP.x, neighbourP.y, neighbourText);
-        neighbourTextElement.setAttribute("class", "debugText");
-        hexmap.mapHtml.appendChild(neighbourTextElement);
-        tempElements.push(neighbourTextElement);
+        // number the neighbours
+        for (var dir = 0; dir < 6; dir++) {
+            var neighbour = Hex.neighbor(hex, dir);
+            var neighbourText = "" + dir;
+            var neighbourP = hexmap.layout.getPixel(neighbour.q, neighbour.r);
+            var neighbourTextElement = createTextElement(neighbourP.x, neighbourP.y, neighbourText);
+            neighbourTextElement.setAttribute("class", "debugText");
+            hexmap.mapHtml.appendChild(neighbourTextElement);
+            tempElements.push(neighbourTextElement);
+        }
     }
     hexmap.tileElements[hexKey(hex.q, hex.r)].classList.add("hover");
-    if (debug == false) {
-        clearTempElements();
-    }
 }
 function onHexUnhovered(hex) {
     hexmap.tileElements[hexKey(hex.q, hex.r)].classList.remove("hover");
 }
-function onLineHovered(line, debug) {
-    if (debug === void 0) { debug = false; }
+function onLineHovered(line) {
     clearTempElements();
-    // number the neighbours
-    getLineHexes(line).forEach(function (hex, index) {
-        var neighbourText = "".concat(index);
-        var neighbourP = hexmap.layout.getPixel(hex.q, hex.r);
-        var neighbourTextElement = createTextElement(neighbourP.x, neighbourP.y, neighbourText);
-        neighbourTextElement.setAttribute("class", "debugText");
-        hexmap.mapHtml.appendChild(neighbourTextElement);
-        tempElements.push(neighbourTextElement);
-    });
+    if (debugHexes) {
+        // number the neighbours
+        getLineHexes(line).forEach(function (hex, index) {
+            var neighbourText = "" + index;
+            var neighbourP = hexmap.layout.getPixel(hex.q, hex.r);
+            var neighbourTextElement = createTextElement(neighbourP.x, neighbourP.y, neighbourText);
+            neighbourTextElement.setAttribute("class", "debugText");
+            hexmap.mapHtml.appendChild(neighbourTextElement);
+            tempElements.push(neighbourTextElement);
+        });
+    }
     //BUG: Getting error hovering over edge lines
     hexmap.lineElements[lineKey(line.q, line.r, line.dir)].classList.add("line-hover");
-    if (debug == false) {
-        clearTempElements();
-    }
 }
-function onCornerHovered(corner, debug) {
-    if (debug === void 0) { debug = false; }
+function onCornerHovered(corner) {
     clearTempElements();
-    // number the neighbours
-    getCornerHexes(corner).forEach(function (hex, index) {
-        var neighbourText = "".concat(index);
-        var neighbourP = hexmap.layout.getPixel(hex.q, hex.r);
-        var neighbourTextElement = createTextElement(neighbourP.x, neighbourP.y, neighbourText);
-        neighbourTextElement.setAttribute("class", "debugText");
-        hexmap.mapHtml.appendChild(neighbourTextElement);
-        tempElements.push(neighbourTextElement);
-    });
-    hexmap.cornerElements[lineKey(corner.q, corner.r, corner.dir)].classList.add("corner-hover");
-    if (debug == false) {
-        clearTempElements();
+    if (debugHexes) {
+        // number the neighbours
+        getCornerHexes(corner).forEach(function (hex, index) {
+            var neighbourText = "" + index;
+            var neighbourP = hexmap.layout.getPixel(hex.q, hex.r);
+            var neighbourTextElement = createTextElement(neighbourP.x, neighbourP.y, neighbourText);
+            neighbourTextElement.setAttribute("class", "debugText");
+            hexmap.mapHtml.appendChild(neighbourTextElement);
+            tempElements.push(neighbourTextElement);
+        });
     }
+    hexmap.cornerElements[lineKey(corner.q, corner.r, corner.dir)].classList.add("corner-hover");
+}
+function onHexClicked(hex) {
+    selectedTile = [hex.q, hex.r];
+    hexmap.selectHex(hex.q, hex.r);
+    game.selectedTypeElement.textContent = "Type: Hex";
+    game.slectedPositionElement.textContent = "Position: " + hex.q + "," + hex.r + ",";
+    game.selectedHeightElement.textContent = "Height: " + hexmap.tiles[hexKey(hex.q, hex.r)].height;
+    game.selectedWaterElement.textContent = "Is Water source: " + hexmap.tiles[hexKey(hex.q, hex.r)].water;
+    game.selectedHumidityElement.textContent = "Humidity: " + hexmap.tiles[hexKey(hex.q, hex.r)].humidity;
+    var tox = hexmap.tiles[hexKey(hex.q, hex.r)].toxicity;
+    game.selectedToxicityElement.textContent = "Toxicity: " + getToxicityLevel(tox) + " (" + tox + ")";
+}
+function onLineClicked(line) {
+    game.selectedTypeElement.textContent = "Type: Edge";
+    game.slectedPositionElement.textContent = "Position: " + line.q + "," + line.r + "," + line.dir;
+    game.selectedHeightElement.textContent = "";
+    game.selectedWaterElement.textContent = "";
+    game.selectedHumidityElement.textContent = "";
+    game.selectedToxicityElement.textContent = "";
+}
+;
+function onCornerClicked(corner) {
+    game.selectedTypeElement.textContent = "Type: Point";
+    game.slectedPositionElement.textContent = "Position: " + corner.q + "," + corner.r + "," + corner.dir;
+    game.selectedHeightElement.textContent = "";
+    game.selectedWaterElement.textContent = "";
+    game.selectedHumidityElement.textContent = "";
+    game.selectedToxicityElement.textContent = "";
+}
+;
+function toggleDebug() {
+    debugHexes = !debugHexes;
+    if (debugHexes)
+        document.getElementById("toggledebug").setAttribute("style", "background-color: #00c46b");
+    else
+        document.getElementById("toggledebug").setAttribute("style", "background-color: #c44600");
+    hexmap.refreshGfx();
 }
 var TileData = /** @class */ (function () {
     function TileData() {
@@ -639,8 +680,6 @@ var CornerData = /** @class */ (function () {
 }());
 var HexMap = /** @class */ (function () {
     function HexMap() {
-        // Debug
-        this.debug = false;
         // Game
         this.mapRadius = 5;
         this.tiles = {};
@@ -693,7 +732,6 @@ var HexMap = /** @class */ (function () {
         }
     };
     HexMap.prototype.refreshGfx = function () {
-        var _this = this;
         if (this.tileElements === undefined) {
             this.tileElements = {};
             var _loop_1 = function (key) {
@@ -701,14 +739,14 @@ var HexMap = /** @class */ (function () {
                 var hex = tile.coords;
                 // tile hex
                 var polygon = createSmallHexElement();
-                polygon.onclick = function () { _this.onHexClicked(hex); };
-                polygon.onmouseenter = function () { onHexHovered(hex, _this.debug); };
+                polygon.onclick = function () { onHexClicked(hex); };
+                polygon.onmouseenter = function () { onHexHovered(hex); };
                 polygon.onmouseleave = function () { onHexUnhovered(hex); };
                 // move everything toghether
                 var tileElement = document.createElementNS("http://www.w3.org/2000/svg", "g");
                 tileElement.appendChild(polygon);
                 var p = this_1.layout.getPixel(hex.q, hex.r);
-                tileElement.setAttribute("transform", "translate(".concat(p.x, ",").concat(p.y, ")"));
+                tileElement.setAttribute("transform", "translate(" + p.x + "," + p.y + ")");
                 this_1.tileElements[hexKey(hex.q, hex.r)] = tileElement;
                 this_1.mapHtml.appendChild(tileElement);
             };
@@ -729,8 +767,8 @@ var HexMap = /** @class */ (function () {
                 var line = lineData.coords;
                 var hexCenter = this_2.layout.getPixel(line.q, line.r);
                 var lineElement = createLineElement(hexCenter.x + hexPoints[line.dir].x, hexCenter.y + hexPoints[line.dir].y, hexCenter.x + hexPoints[line.dir + 1].x, hexCenter.y + hexPoints[line.dir + 1].y);
-                lineElement.onclick = function () { _this.onLineClicked(line); };
-                lineElement.onmouseenter = function () { onLineHovered(line, _this.debug); };
+                lineElement.onclick = function () { onLineClicked(line); };
+                lineElement.onmouseenter = function () { onLineHovered(line); };
                 lineElement.onmouseleave = function () { lineElement.classList.remove("line-hover"); };
                 this_2.lineElements[key] = lineElement;
                 this_2.mapHtml.appendChild(lineElement);
@@ -752,8 +790,8 @@ var HexMap = /** @class */ (function () {
                 var corner = cornerData.coords;
                 var hexCenter = this_3.layout.getPixel(corner.q, corner.r);
                 var pointElement = createCircleElement(hexCenter.x + hexPoints[corner.dir].x, hexCenter.y + hexPoints[corner.dir].y, 10);
-                pointElement.onclick = function () { _this.onCornerClicked(corner); };
-                pointElement.onmouseenter = function () { onCornerHovered(corner, _this.debug); };
+                pointElement.onclick = function () { onCornerClicked(corner); };
+                pointElement.onmouseenter = function () { onCornerHovered(corner); };
                 pointElement.onmouseleave = function () { pointElement.classList.remove("corner-hover"); };
                 this_3.cornerElements[key] = pointElement;
                 this_3.mapHtml.appendChild(pointElement);
@@ -791,7 +829,7 @@ var HexMap = /** @class */ (function () {
         this.tileElements[hexKey(q, r)].classList.add("selected");
     };
     HexMap.prototype.setCamera = function (q, y, scale) {
-        this.mapHtml.setAttribute("transform", "translate(".concat(q, ",").concat(y, ") scale(").concat(scale, ")"));
+        this.mapHtml.setAttribute("transform", "translate(" + q + "," + y + ") scale(" + scale + ")");
     };
     ///> Adds the tile to the map and creates the lines and corners
     HexMap.prototype.addNewTile = function (q, r, tile) {
@@ -976,7 +1014,6 @@ var Resources = /** @class */ (function () {
 }());
 var Game = /** @class */ (function () {
     function Game() {
-        this.clicks = 0;
     }
     Game.prototype.resetState = function () {
         localStorage.clear();
@@ -1027,26 +1064,9 @@ var Game = /** @class */ (function () {
         document.getElementById("restart").onclick = function () { _this.resetState(); };
         document.getElementById("savegame").onclick = function () { _this.saveState(); };
         document.getElementById("loadgame").onclick = function () { _this.loadState(); };
-        document.getElementById("toggledebug").onclick = function () { _this.toggleDebug(); };
+        document.getElementById("toggledebug").onclick = function () { toggleDebug(); };
         document.getElementById("nextturn").onclick = function () { _this.nextTurn(); };
         this.loadState();
-    };
-    Game.prototype.toggleDebug = function () {
-        if (hexmap.debug == true) {
-            hexmap.debug = false;
-            document.getElementById("toggledebug").setAttribute("style", "background-color: #c44600");
-            hexmap.refreshGfx();
-        }
-        else {
-            hexmap.debug = true;
-            document.getElementById("toggledebug").setAttribute("style", "background-color: #00c46b");
-            hexmap.refreshGfx();
-        }
-    };
-    Game.prototype.clicked = function (q, r) {
-        this.clicks++;
-        this.selectedTypeElement.textContent = "Score:" + this.clicks;
-        console.log("Clicked ", q, r);
     };
     Game.prototype.nextTurn = function () {
         // spread toxicity
@@ -1072,39 +1092,11 @@ var game = new Game;
 var hexmap = new HexMap;
 var citizensList = new CitizensList;
 var resources = new Resources;
-var selectedTile = [0, 0]; // Need to remember selected tile
 window.onload = function () {
     console.log("Loaded");
     game.init();
     resources.addAmount("polymers", 100);
     resources.addAmount("metals", 125);
     resources.refreshGfx();
-    hexmap.onHexClicked = function (hex) {
-        selectedTile = [hex.q, hex.r];
-        hexmap.selectHex(hex.q, hex.r);
-        game.selectedTypeElement.textContent = "Type: Hex";
-        game.slectedPositionElement.textContent = "Position: " + hex.q + "," + hex.r + ",";
-        game.selectedHeightElement.textContent = "Height: " + hexmap.tiles[hexKey(hex.q, hex.r)].height;
-        game.selectedWaterElement.textContent = "Is Water source: " + hexmap.tiles[hexKey(hex.q, hex.r)].water;
-        game.selectedHumidityElement.textContent = "Humidity: " + hexmap.tiles[hexKey(hex.q, hex.r)].humidity;
-        var tox = hexmap.tiles[hexKey(hex.q, hex.r)].toxicity;
-        game.selectedToxicityElement.textContent = "Toxicity: " + getToxicityLevel(tox) + " (" + tox + ")";
-    };
-    hexmap.onLineClicked = function (line) {
-        game.selectedTypeElement.textContent = "Type: Edge";
-        game.slectedPositionElement.textContent = "Position: " + line.q + "," + line.r + "," + line.dir;
-        game.selectedHeightElement.textContent = "";
-        game.selectedWaterElement.textContent = "";
-        game.selectedHumidityElement.textContent = "";
-        game.selectedToxicityElement.textContent = "";
-    };
-    hexmap.onCornerClicked = function (corner) {
-        game.selectedTypeElement.textContent = "Type: Point";
-        game.slectedPositionElement.textContent = "Position: " + corner.q + "," + corner.r + "," + corner.dir;
-        game.selectedHeightElement.textContent = "";
-        game.selectedWaterElement.textContent = "";
-        game.selectedHumidityElement.textContent = "";
-        game.selectedToxicityElement.textContent = "";
-    };
 };
 //# sourceMappingURL=game.js.map
