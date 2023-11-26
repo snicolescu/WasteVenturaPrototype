@@ -3,19 +3,15 @@
 
 /* 
 TODO:
-    action choosing flow
-        pick element
-        pick activity (build, clear, harvest)
-            separate button for each build type
-        pick citizen
-        confirm if not idle
+    height per node instead of per-tile
+    water flows down
+    polluted/clean water
+        water sources are polluted, pipe it to waste treatment to clean it
+        pump clean water out
+        you can't cross water pipes with other pipes
 
-    citizen activities
-        clear toxicity
-        build
-        harvest
-
-
+    show citizen on tile
+    cancel action
 
     spawn small number of toxic and water tiles
     add UI for tooltips
@@ -90,7 +86,8 @@ function setLens( button: HTMLInputElement)
 {
     Object.keys(Lens).forEach( key => { if (button.value == key) { lens = Lens[key]; } });
     hexmap.refreshGfx();
-    hexmap.addTextToAllElements( button.value, button.value.toLowerCase());
+    if (lens > Lens.Height)
+        hexmap.addTextToAllElements( button.value, button.value.toLowerCase());
 }
 
 function removeLens()
@@ -111,21 +108,29 @@ class ChangeActionFlow
 
     public dude? : Citizen = null;
     public target? : Hex | Line | Corner = null;
+    public info? : any = null; // extra action data
     public action : CitizenAction = CitizenAction.Idle;
-    public targetIsOK: ( target: Hex | Line | Corner) => boolean = null; // return true if it's a valid target
-    public onStart : () => void = null;
-    public onConfirm : (target: Hex | Line | Corner) => void = null;
-    public onCancel : () => void = null;
-
-    public static justHexes( target: Hex | Line | Corner) : boolean {
-        return target instanceof Hex;
-    }
 }
 
 let currentAction : ChangeActionFlow = null;
 
-let selectedTile:number[] = [0,0]; // Need to remember selected tile
+function confirmAction() {
+    if (currentAction != null) {
+        //TODO: Handle cancelling previous activity here
+        currentAction.dude.chosenAction = currentAction.action;
+        if (currentAction.target instanceof Hex)
+            currentAction.dude.assignedHex = currentAction.target;
+        else if (currentAction.target instanceof Line)
+            currentAction.dude.assignedLine = currentAction.target;
+        else if (currentAction.target instanceof Corner)
+            currentAction.dude.assignedCorner = currentAction.target;
+        currentAction.dude.actionStuff = currentAction.info;
+        currentAction = null;
+        citizensList.refreshGfx();
+    }
+}
 
+let selectedTile:number[] = [0,0]; // Need to remember selected tile
 
 let tempElements : Element[] = [];
 
@@ -150,7 +155,7 @@ function setTileGfx( element : Element, tile : TileData)
             element.removeAttribute("class");
             element.removeAttribute("stroke");
             element.removeAttribute("stroke-width");
-            element.setAttribute("fill", rgbToHexa(tile.height * 50, tile.height * 50, tile.height * 50));
+            element.setAttribute("fill", rgbToHexa(0,0,0));
             break;
         case Lens.Energy:
             element.removeAttribute("class");
@@ -173,7 +178,7 @@ function setTileGfx( element : Element, tile : TileData)
             if (tile.toxicity > toxicityThresholds[0]) {
                 let toxicityLevel = getToxicityLevel(tile.toxicity);
                 element.classList.add("toxic" + clamp(toxicityLevel, 1, 4));
-            } else if (tile.humidity> 0) {
+            } else if (tile.humidity > 0) {
                 element.classList.add("humidity" + clamp(tile.humidity, 1, 5));
             } else {
                 element.classList.add("land"+ randInt(1, 3));
@@ -185,7 +190,7 @@ function setTileGfx( element : Element, tile : TileData)
 
 function setLineGfx( element : Element, line : LineData)
 {
-    switch (line.built) {
+    switch (line.building) {
         case LineBuilding.Empty:
             element.setAttribute("class", "line-empty");
             break;
@@ -195,9 +200,9 @@ function setLineGfx( element : Element, line : LineData)
     }
 }
 
-function setCornerGfx( element : Element, corner : CornerData)
+function setCornerGfx( element : Element, data : CornerData)
 {
-    switch (corner.built) {
+    switch (data.building) {
         case CornerBuilding.Empty:
             element.setAttribute("class", "corner-empty");
             break;
@@ -205,6 +210,13 @@ function setCornerGfx( element : Element, corner : CornerData)
             element.setAttribute("class", "corner-power");
             break;
     }
+
+    if (lens == Lens.Height) 
+    {
+        element.removeAttribute("class");
+        element.setAttribute("fill", rgbToHexa(data.height * 50, data.height * 50, data.height * 50));
+    } else
+        element.removeAttribute("fill");
 }
 
 function onSelectHex( hex: Hex) {
@@ -218,9 +230,9 @@ function onHexHovered(hex: Hex) {
         let tile = hexmap.tiles[hexKey(hex.q, hex.r)];
 
         let text = `(${hex.q},${hex.r})`;
-        if (tile.height > 0) {
-            text += ` h:${tile.height}`;
-        }
+        //if (tile.height > 0) {
+        //    text += ` h:${tile.height}`;
+        //}
         if (tile.humidity > 0) {
             text += ` w:${tile.humidity}`;
         }
@@ -268,7 +280,6 @@ function onLineHovered(line: Line) {
         });
     }
 
-    //BUG: Getting error hovering over edge lines
     hexmap.lineElements[lineKey(line.q, line.r, line.dir)].classList.add("line-hover");
 }
 
@@ -296,11 +307,24 @@ function onHexClicked(hex: Hex) {
 
     game.selectedTypeElement.textContent = "Type: Hex" 
     game.slectedPositionElement.textContent = "Position: " + hex.q + "," + hex.r + ",";
-    game.selectedHeightElement.textContent = "Height: "     + hexmap.tiles[hexKey(hex.q,hex.r)].height;
+    //game.selectedHeightElement.textContent = "Height: "     + hexmap.tiles[hexKey(hex.q,hex.r)].height;
     game.selectedWaterElement.textContent = "Is Water source: "       + hexmap.tiles[hexKey(hex.q,hex.r)].water;
     game.selectedHumidityElement.textContent = "Humidity: "       + hexmap.tiles[hexKey(hex.q,hex.r)].humidity;
     let tox = hexmap.tiles[hexKey(hex.q,hex.r)].toxicity;
     game.selectedToxicityElement.textContent = "Toxicity: " + getToxicityLevel(tox) + " (" + tox + ")";
+
+    game.actionMenuElement.classList.remove("hidden");
+    while (game.actionMenuElement.firstChild) {
+        game.actionMenuElement.removeChild(game.actionMenuElement.firstChild);
+    }
+
+    if (hexmap.tiles[hexKey(hex.q,hex.r)].toxicity > 0) {
+        addDropdownChild(game.actionMenuElement, "Clear Toxicity", () => {
+            currentAction = new ChangeActionFlow(CitizenAction.ClearToxicity);
+            currentAction.target = hex;
+            citizensList.refreshGfx();
+        });
+    }
 }
 
 function onLineClicked( line : Line) {
@@ -310,6 +334,18 @@ function onLineClicked( line : Line) {
     game.selectedWaterElement.textContent = "";
     game.selectedHumidityElement.textContent = ""
     game.selectedToxicityElement.textContent = "";
+
+    game.actionMenuElement.classList.remove("hidden");
+    while (game.actionMenuElement.firstChild) {
+        game.actionMenuElement.removeChild(game.actionMenuElement.firstChild);
+    }
+
+    addDropdownChild(game.actionMenuElement, "Build Waterway", () => {
+        currentAction = new ChangeActionFlow(CitizenAction.Build);
+        currentAction.target = line;
+        currentAction.info = LineBuilding.Waterway;
+        citizensList.refreshGfx();
+    });
 };
 
 function onCornerClicked( corner :Corner) {
@@ -319,6 +355,8 @@ function onCornerClicked( corner :Corner) {
     game.selectedWaterElement.textContent = "";
     game.selectedHumidityElement.textContent = ""
     game.selectedToxicityElement.textContent = "";
+
+    game.actionMenuElement.classList.add("hidden");
 };
 
 function toggleDebug() {
@@ -334,11 +372,12 @@ function toggleDebug() {
 class TileData
 {
     public coords       : Hex = null;
-    public height       : number = 0;
     public water        : boolean = false;      // If it is a water source or not
     public humidity     : number = 0;           // The humidity level of the tile 0 - 5
     public toxicity     : number = 0;
     public energy       : number = 0;
+    public building     : TileBuilding = TileBuilding.Empty;
+    public buildingData : any = null; // this will hold info about the building
 
     static toxicTile() : TileData
     {
@@ -366,7 +405,7 @@ class TileData
     {
         let funcs = [ TileData.toxicTile, TileData.waterTile, TileData.landTile ];
         let tile = funcs[Math.floor(Math.random() * funcs.length)]();
-        tile.height = Math.floor(Math.random() * 5);
+        //tile.height = Math.floor(Math.random() * 5);
         return tile;
     }
 }
@@ -374,13 +413,14 @@ class TileData
 class LineData
 {
     coords: Line = null;
-    built : LineBuilding = LineBuilding.Empty;
+    building: LineBuilding = LineBuilding.Empty;
 }
 
 class CornerData
 {
     coords: Line = null;
-    built : CornerBuilding = CornerBuilding.Empty;
+    building: CornerBuilding = CornerBuilding.Empty;
+    height: number = 0;
 }
 
 class HexMap
@@ -388,9 +428,9 @@ class HexMap
     // Game
     public mapRadius: number = 5;
     
-    public tiles : { [key: number]: TileData; } = { };
-    public lines : { [key: number]: LineData; } = { };
-    public corners : { [key: number]: CornerData; } = { };
+    public tiles    : { [key: number]: TileData; } = {};
+    public lines    : { [key: number]: LineData; } = {};
+    public corners  : { [key: number]: CornerData; } = {};
     
     // UI
     public layout = new Layout(Layout.flat, Pt(100,100), Pt(0,0));
@@ -413,6 +453,12 @@ class HexMap
                     this.addNewTile( x, y, TileData.makeRandomTile());
                 }
             }
+        }
+        // pick a few corners to set their height randomly
+        let bla = Object.keys(this.corners);
+        for (let i = 0; i < 50; i++) {
+            let corner = this.corners[bla[randInt(0, bla.length - 1)]];
+            corner.height = randInt(0, 5);
         }
     }
 
@@ -590,7 +636,7 @@ class HexMap
 
         // hex corners (only on the inside of the map)
         let hexCorners = getHexCorners(hex);
-        for (let cornerNum = 0; cornerNum < 3; cornerNum++) // only 3 corners since other 3 are covered by other hexes
+        for (let cornerNum = 0; cornerNum < 2; cornerNum++) // only 2 corners since other 4 are covered by other hexes
         {
             let keepCorner = true;
             let corner = hexCorners[cornerNum];
@@ -611,7 +657,9 @@ class HexMap
 class Citizen
 {
     name: string = "ph_name";
-    assignedTile: Hex = null;
+    assignedHex?: Hex = null;
+    assignedLine?: Line = null;
+    assignedCorner?: Corner = null;
     chosenAction: CitizenAction = CitizenAction.Idle;
     actionStuff: any = null; // this will hold info about the status of build actions
 }
@@ -620,8 +668,6 @@ class CitizensList
 {
     constructor() {
         this.citizens = [];
-        //CRB: This doesn't work because it's called in the constructor, but the html hasn't finished loading. Need to wait for onload
-        //this.table = document.getElementById("citizens_table") as HTMLTableElement;
     }
    
     // Game
@@ -638,6 +684,15 @@ class CitizensList
 
     loadCitizens( citizens: Citizen[]) {
         this.citizens = citizens;
+        for (let i = 0; i < this.citizens.length; i++) {
+            let citizen = this.citizens[i];
+            if (citizen.assignedHex != null)
+                citizen.assignedHex = new Hex(citizen.assignedHex.q, citizen.assignedHex.r);
+            if (citizen.assignedLine != null)
+                citizen.assignedLine = new Line(citizen.assignedLine.q, citizen.assignedLine.r, citizen.assignedLine.dir);
+            if (citizen.assignedCorner != null)
+                citizen.assignedCorner = new Corner(citizen.assignedCorner.q, citizen.assignedCorner.r, citizen.assignedCorner.dir);
+        }
     }
 
     populateWithRandomCitizens() {
@@ -656,15 +711,29 @@ class CitizensList
                 case CitizenAction.Idle:
                     break;
                 case CitizenAction.ClearToxicity:
-                    if (citizen.assignedTile) {
-                        let tile = hexmap.tiles[hexKey(citizen.assignedTile.q, citizen.assignedTile.r)];
-                        if (tile.toxicity > 0) {
-                            tile.toxicity = Math.max( tile.toxicity - toxicityPerTurn * 10 , 0);
-                        }
+                    let tile = hexmap.tiles[hexKey(citizen.assignedHex.q, citizen.assignedHex.r)];
+                    if (tile.toxicity > 0) {
+                        tile.toxicity = Math.max( tile.toxicity - toxicityPerTurn * 10 , 0);
                     }
                     break;
                 case CitizenAction.Build:
-                    //TODO: Add work to building
+                    if (citizen.assignedHex) {
+                        let tile = hexmap.tiles[hexKey(citizen.assignedHex.q, citizen.assignedHex.r)];
+                        tile.building = citizen.actionStuff as TileBuilding;
+                        citizen.assignedHex = null;
+                    }
+                    if (citizen.assignedLine) {
+                        let line = hexmap.lines[lineKey(citizen.assignedLine.q, citizen.assignedLine.r, citizen.assignedLine.dir)];
+                        line.building = citizen.actionStuff as LineBuilding;
+                        citizen.assignedLine = null;
+                    }
+                    if (citizen.assignedCorner) {
+                        let corner = hexmap.corners[cornerKey(citizen.assignedCorner.q, citizen.assignedCorner.r, citizen.assignedCorner.dir)];
+                        corner.building = citizen.actionStuff as CornerBuilding;
+                        citizen.assignedCorner = null;
+                    }
+                    citizen.chosenAction = CitizenAction.Idle;
+
                     break;
                 case CitizenAction.Harvest:
                     //TODO: Generate stuff based on assigned tile
@@ -689,52 +758,35 @@ class CitizensList
             let cell3 = row.insertCell(2);
 
             cell1.innerHTML = citizen.name;
-            cell2.innerHTML = citizen.assignedTile ? citizen.assignedTile[0] + "," + citizen.assignedTile[1] : "Idle";
-            cell3.innerHTML = "Alive"; // status used to go here
+            cell2.innerHTML = CitizenAction[citizen.chosenAction].toString();
 
-            // action stuff
-            let actionCell = row.insertCell(3);
-
-            let container = document.createElement("div");
-            container.classList.add("btn-group");
-            actionCell.appendChild(container);
-
-            let actionButton = document.createElement("button");
-            actionButton.type = "button";
-            actionButton.classList.add("btn", "btn-primary", "btn-sm");
-            actionButton.textContent = CitizenAction[citizen.chosenAction].toString();
-            container.appendChild(actionButton);
-
-            let dropdownButton = document.createElement("button");
-            dropdownButton.type = "button";
-            dropdownButton.classList.add("btn", "btn-primary", "btn-sm", "dropdown-toggle", "dropdown-toggle-split");
-            dropdownButton.dataset.toggle = "dropdown";
-            dropdownButton.setAttribute("aria-haspopup", "true");
-            dropdownButton.setAttribute("aria-expanded", "false");
-            container.appendChild(dropdownButton);
-
-            let dropdownSpan = document.createElement("span");
-            dropdownSpan.classList.add("sr-only");
-            dropdownSpan.textContent = "Toggle Dropdown";
-            dropdownButton.appendChild(dropdownSpan);
-
-            let dropdownMenu = document.createElement("div");
-            dropdownMenu.classList.add("dropdown-menu");
-            container.appendChild(dropdownMenu);
-
-            for (let j = 0; j < CitizenAction.Count; j++) {
-                if (j == citizen.chosenAction)
-                    continue;
-                addDropdownChild(dropdownMenu, CitizenAction[j], () => { 
-                    citizen.chosenAction = j;
-                    //TODO: Set action choose target state
-
-                    this.refreshGfx(); 
-                });
+            if (currentAction != null) {
+                let actionButton = document.createElement("button");
+                actionButton.type = "button";
+                actionButton.classList.add("btn", "btn-primary", "btn-sm");
+                actionButton.textContent = "Pick Me !"
+                actionButton.onclick = () => {  currentAction.dude = citizen; confirmAction(); };
+                cell3.appendChild(actionButton);
             }
-
-            //let dropdownDivider = document.createElement("div");
-            //dropdownDivider.classList.add("dropdown-divider");
+            else
+                cell3.innerHTML = "Alive"; // status used to go here
+            
+            row.onmouseenter = () => { 
+                if (citizen.assignedHex != null)
+                    onHexHovered(citizen.assignedHex);
+                if (citizen.assignedLine != null)
+                    onLineHovered(citizen.assignedLine);
+                if (citizen.assignedCorner != null)
+                    onCornerHovered(citizen.assignedCorner);
+            };
+            row.onmouseleave = () => { 
+                if (citizen.assignedHex != null)
+                    hexmap.tileElements[hexKey(citizen.assignedHex.q, citizen.assignedHex.r)].classList.remove("hover");
+                if (citizen.assignedLine != null)
+                    hexmap.lineElements[lineKey(citizen.assignedLine.q, citizen.assignedLine.r, citizen.assignedLine.dir)].classList.remove("line-hover");
+                if (citizen.assignedCorner != null)
+                    hexmap.cornerElements[cornerKey(citizen.assignedCorner.q, citizen.assignedCorner.r, citizen.assignedCorner.dir)].classList.remove("corner-hover");
+            };
         }
     }
 }
@@ -788,18 +840,35 @@ class Game
 
             citizensList.populateWithRandomCitizens();
             hexmap.populateWithRandomTiles();
-        }else {
+            resources.polymers = 100;
+            resources.metals = 125;
+        } else {
             let saveJson = JSON.parse(saveString);
             console.log("Loaded saved data from " + saveName + ".");
 
             citizensList.loadCitizens( saveJson.citizens);
-            hexmap.tiles = saveJson.tiles;
+            for (let key in saveJson.tiles) {
+                let tile = saveJson.tiles[key];
+                tile.coords = new Hex(tile.coords.q, tile.coords.r);
+                hexmap.tiles[key] = tile;
+            }
             hexmap.lines = saveJson.lines;
+            for (let key in hexmap.lines) {
+                let line = hexmap.lines[key];
+                line.coords = new Line(line.coords.q, line.coords.r, line.coords.dir);
+            }
             hexmap.corners = saveJson.corners;
+            for (let key in hexmap.corners) {
+                let corner = hexmap.corners[key];
+                corner.coords = new Corner(corner.coords.q, corner.coords.r, corner.coords.dir);
+
+            }
+            Object.assign(resources, saveJson.resources);
         }
 
         citizensList.refreshGfx();
         hexmap.refreshGfx();
+        resources.refreshGfx();
     }
 
     saveState() {
@@ -808,7 +877,8 @@ class Game
             citizens: citizensList.citizens,
             tiles: hexmap.tiles,
             lines: hexmap.lines,
-            corners: hexmap.corners
+            corners: hexmap.corners,
+            resources: resources,
         };
         let saveString = JSON.stringify(saveJson);
         localStorage.setItem( saveName, saveString);
@@ -821,6 +891,7 @@ class Game
     selectedWaterElement : Element;
     selectedHumidityElement : Element;
     selectedToxicityElement : Element;
+    actionMenuElement : Element;
 
     init() {
         //TODO: merge tile & game classes
@@ -833,6 +904,7 @@ class Game
         this.selectedWaterElement = document.getElementById("selected_water");
         this.selectedHumidityElement = document.getElementById("selected_humidity");
         this.selectedToxicityElement = document.getElementById("selected_toxicity");
+        this.actionMenuElement = document.getElementById("action_menu");
 
         document.getElementById("restart").onclick = () => { this.resetState(); };
         document.getElementById("savegame").onclick = () => { this.saveState(); };
@@ -859,6 +931,8 @@ class Game
             }
         }
 
+        citizensList.doCitizensTurn();
+
         citizensList.refreshGfx();
         hexmap.refreshGfx();
     }
@@ -873,8 +947,4 @@ window.onload = function () {
     console.log("Loaded");
 
     game.init();
-    
-    resources.addAmount("polymers", 100);
-    resources.addAmount("metals", 125);
-    resources.refreshGfx();
 }

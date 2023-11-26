@@ -1,12 +1,12 @@
 
 // Helper functions
 
-//function getRandomElement<Type>(dictionary: { [key: number]: Type; } ) : Type
-//{
-//    let keys = Object.keys(dictionary);
-//    let index = Math.floor(Math.random() * keys.length);
-//    return dictionary[keys[index]];
-//}
+
+function assert(condition: any, msg?: string): asserts condition {
+    if (!condition) {
+        throw new Error(msg);
+    }
+}
 
 function rgbToHexa(r: number, g: number, b: number) {
     return `#${((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1)}`;
@@ -19,6 +19,13 @@ function clamp(n: number, min: number, max: number) {
 // returns a random integer in the range [min, max]
 function randInt(min: number, max: number) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function getRandomElement<Type>(dictionary: { [key: number]: Type; } ) : Type
+{
+    let keys = Object.keys(dictionary);
+    let index = Math.floor(Math.random() * keys.length);
+    return dictionary[keys[index]];
 }
 
 // HTML helpers
@@ -144,17 +151,31 @@ function getHexCorners( hex: Hex) : Corner[] {
     let corners = [];
     corners.push( new Corner( hex.q, hex.r, 0));
     corners.push( new Corner( hex.q, hex.r, 1));
-    corners.push( new Corner( hex.q, hex.r, 2));
+    corners.push( new Corner( Hex.directions[2].q + hex.q, Hex.directions[2].r + hex.r, 0));
+    corners.push( new Corner( Hex.directions[3].q + hex.q, Hex.directions[3].r + hex.r, 1));
     corners.push( new Corner( Hex.directions[3].q + hex.q, Hex.directions[3].r + hex.r, 0));
     corners.push( new Corner( Hex.directions[4].q + hex.q, Hex.directions[4].r + hex.r, 1));
-    corners.push( new Corner( Hex.directions[5].q + hex.q, Hex.directions[5].r + hex.r, 2));
     return corners;
 }
 
 function getCornerHexes( corner : Corner) : Hex[] {
     return [new Hex( corner.q, corner.r), 
+            new Hex( corner.q + Hex.directions[(corner.dir + 5) % 6].q, corner.r + Hex.directions[(corner.dir + 5) % 6].r),
             new Hex( corner.q + Hex.directions[corner.dir].q, corner.r + Hex.directions[corner.dir].r),
-            new Hex( corner.q + Hex.directions[(corner.dir + 5) % 6].q, corner.r + Hex.directions[(corner.dir + 5) % 6].r)];
+        ];
+}
+
+function getCornerNeighbours( corner : Corner) : Corner[] {
+    if (corner.dir == 0)
+        return [new Corner( corner.q, corner.r, 1),
+            new Corner( corner.q + Hex.directions[4].q, corner.r + Hex.directions[4].r, 1),
+            new Corner( corner.q + Hex.directions[5].q, corner.r + Hex.directions[5].r, 1),];
+    else if (corner.dir == 1)
+        return [new Corner( corner.q, corner.r, 0),
+            new Corner( corner.q + Hex.directions[1].q, corner.r + Hex.directions[1].r, 0),
+            new Corner( corner.q + Hex.directions[2].q, corner.r + Hex.directions[2].r, 0),];
+    else
+        assert(false, "Invalid corner direction");
 }
 
 function hexKey( q : number, r: number) : number

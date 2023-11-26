@@ -186,12 +186,11 @@ var Layout = /** @class */ (function () {
     return Layout;
 }());
 // Helper functions
-//function getRandomElement<Type>(dictionary: { [key: number]: Type; } ) : Type
-//{
-//    let keys = Object.keys(dictionary);
-//    let index = Math.floor(Math.random() * keys.length);
-//    return dictionary[keys[index]];
-//}
+function assert(condition, msg) {
+    if (!condition) {
+        throw new Error(msg);
+    }
+}
 function rgbToHexa(r, g, b) {
     return "#" + ((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1);
 }
@@ -201,6 +200,11 @@ function clamp(n, min, max) {
 // returns a random integer in the range [min, max]
 function randInt(min, max) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+function getRandomElement(dictionary) {
+    var keys = Object.keys(dictionary);
+    var index = Math.floor(Math.random() * keys.length);
+    return dictionary[keys[index]];
 }
 // HTML helpers
 function createSmallHexElement() {
@@ -316,16 +320,29 @@ function getHexCorners(hex) {
     var corners = [];
     corners.push(new Corner(hex.q, hex.r, 0));
     corners.push(new Corner(hex.q, hex.r, 1));
-    corners.push(new Corner(hex.q, hex.r, 2));
+    corners.push(new Corner(Hex.directions[2].q + hex.q, Hex.directions[2].r + hex.r, 0));
+    corners.push(new Corner(Hex.directions[3].q + hex.q, Hex.directions[3].r + hex.r, 1));
     corners.push(new Corner(Hex.directions[3].q + hex.q, Hex.directions[3].r + hex.r, 0));
     corners.push(new Corner(Hex.directions[4].q + hex.q, Hex.directions[4].r + hex.r, 1));
-    corners.push(new Corner(Hex.directions[5].q + hex.q, Hex.directions[5].r + hex.r, 2));
     return corners;
 }
 function getCornerHexes(corner) {
     return [new Hex(corner.q, corner.r),
+        new Hex(corner.q + Hex.directions[(corner.dir + 5) % 6].q, corner.r + Hex.directions[(corner.dir + 5) % 6].r),
         new Hex(corner.q + Hex.directions[corner.dir].q, corner.r + Hex.directions[corner.dir].r),
-        new Hex(corner.q + Hex.directions[(corner.dir + 5) % 6].q, corner.r + Hex.directions[(corner.dir + 5) % 6].r)];
+    ];
+}
+function getCornerNeighbours(corner) {
+    if (corner.dir == 0)
+        return [new Corner(corner.q, corner.r, 1),
+            new Corner(corner.q + Hex.directions[4].q, corner.r + Hex.directions[4].r, 1),
+            new Corner(corner.q + Hex.directions[5].q, corner.r + Hex.directions[5].r, 1),];
+    else if (corner.dir == 1)
+        return [new Corner(corner.q, corner.r, 0),
+            new Corner(corner.q + Hex.directions[1].q, corner.r + Hex.directions[1].r, 0),
+            new Corner(corner.q + Hex.directions[2].q, corner.r + Hex.directions[2].r, 0),];
+    else
+        assert(false, "Invalid corner direction");
 }
 function hexKey(q, r) {
     return q + r * 1000;
@@ -340,19 +357,15 @@ function cornerKey(q, r, dir) {
 /// <reference path="./utils.ts" />
 /*
 TODO:
-    action choosing flow
-        pick element
-        pick activity (build, clear, harvest)
-            separate button for each build type
-        pick citizen
-        confirm if not idle
+    height per node instead of per-tile
+    water flows down
+    polluted/clean water
+        water sources are polluted, pipe it to waste treatment to clean it
+        pump clean water out
+        you can't cross water pipes with other pipes
 
-    citizen activities
-        clear toxicity
-        build
-        harvest
-
-
+    show citizen on tile
+    cancel action
 
     spawn small number of toxic and water tiles
     add UI for tooltips
@@ -410,180 +423,6 @@ function getToxicityLevel(toxicity) {
     }
     return toxicityThresholds.length;
 }
-/*
-// Helper functions
-
-//function getRandomElement<Type>(dictionary: { [key: number]: Type; } ) : Type
-//{
-//    let keys = Object.keys(dictionary);
-//    let index = Math.floor(Math.random() * keys.length);
-//    return dictionary[keys[index]];
-//}
-
-function rgbToHexa(r: number, g: number, b: number) {
-    return `#${((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1)}`;
-}
-
-function clamp(n: number, min: number, max: number) {
-    return Math.max(min, Math.min(max, n));
-}
-
-// returns a random integer in the range [min, max]
-function randInt(min: number, max: number) {
-    return Math.floor(Math.random() * (max - min + 1)) + min;
-}
-
-// HTML helpers
-
-function createSmallHexElement() {
-    var hexElement = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
-    hexElement.setAttribute("points", smallHexString);
-    return hexElement;
-}
-
-function createLineElement(x1: number, y1: number, x2: number, y2: number) {
-    var lineElement = document.createElementNS("http://www.w3.org/2000/svg", "line");
-    lineElement.setAttribute("x1", x1.toString());
-    lineElement.setAttribute("y1", y1.toString());
-    lineElement.setAttribute("x2", x2.toString());
-    lineElement.setAttribute("y2", y2.toString());
-    lineElement.setAttribute("stroke-width", "18");
-    lineElement.setAttribute("stroke-linecap", "round");
-
-    // Get the length of the line
-    const length = Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
-
-    // Calculate the new start and end points
-    const offset = 20;
-    const newStartX = x1 + (offset / length) * (x2 - x1);
-    const newStartY = y1 + (offset / length) * (y2 - y1);
-    const newEndX = x2 - (offset / length) * (x2 - x1);
-    const newEndY = y2 - (offset / length) * (y2 - y1);
-
-    // Set the new start and end points
-    lineElement.setAttribute("x1", newStartX.toString());
-    lineElement.setAttribute("y1", newStartY.toString());
-    lineElement.setAttribute("x2", newEndX.toString());
-    lineElement.setAttribute("y2", newEndY.toString());
-
-    return lineElement;
-}
-
-function createTextElement( x: number, y: number, text: string) {
-    var textElement = document.createElementNS("http://www.w3.org/2000/svg", "text");
-    textElement.setAttribute("x", x.toString());
-    textElement.setAttribute("y", y.toString());
-    textElement.textContent = text;
-    return textElement;
-}
-
-function createCircleElement( x: number, y: number, radius :number) {
-    var pointElement = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-    pointElement.setAttribute("cx", x.toString());
-    pointElement.setAttribute("cy", y.toString());
-    pointElement.setAttribute("r", radius.toString());
-    return pointElement;
-}
-
-function addDropdownChild( parent: Element, label: string, callback: () => void) {
-    let dropdownItem1 = document.createElement("a");
-    dropdownItem1.classList.add("dropdown-item");
-    dropdownItem1.href = "#";
-    dropdownItem1.textContent = label;
-    dropdownItem1.onclick = callback;
-    parent.appendChild(dropdownItem1);
-}
-
-// Hex, Line & Point helpers
-
-function Pt(x : number, y : number) : Point { return new Point(x, y); };
-
-// Starts in bottom right and goes anti-clockwise
-// ! Careful, it has 7 points, the first and last are the same so we don't have to modulo when adding lines
-const hexPoints = [ Pt(50,87), Pt(100,0), Pt(50,-87), Pt(-50,-87), Pt(-100,-0), Pt(-50,87), Pt(50,87)];
-const fullHexString = "50,87 100,0 50,-87 -50,-87 -100,-0 -50,87";
-// const smallHexString = "40,69.6 80,-0 40,-69.6 -40,-69.6 -80,-0 -40,69.6"; // 80% of the full size
-//const smallHexString = "42.5,73.95 85,0 42.5,-73.95 -42.5,-73.95 -85,-0 -42.5,73.95"; // 85% of the full size
-const smallHexString = "45,78.3 90,-0 45,-78.3 -45,-78.3 -90,-0 -45,78.3"; // 90% of the full size
-
-class Line {
-    constructor( public q:number, public r:number, public dir:number) { }
-}
-
-class Corner {
-    constructor( public q:number, public r:number, public dir:number) { }
-}
-
-function getHexNeighbours( hex: Hex) : Hex[] {
-    return [new Hex( hex.q + Hex.directions[0].q, hex.r + Hex.directions[0].r),
-            new Hex( hex.q + Hex.directions[1].q, hex.r + Hex.directions[1].r),
-            new Hex( hex.q + Hex.directions[2].q, hex.r + Hex.directions[2].r),
-            new Hex( hex.q + Hex.directions[3].q, hex.r + Hex.directions[3].r),
-            new Hex( hex.q + Hex.directions[4].q, hex.r + Hex.directions[4].r),
-            new Hex( hex.q + Hex.directions[5].q, hex.r + Hex.directions[5].r)];
-}
-
-// CRB: Basically each hex has 3 lines that "belong" to it.  The line is identified by the hex and the direction.
-//  So to get the other three you look in the remaining three directions and point towards this hex
-function getHexLines( hex: Hex) : Line[] {
-    let lines = [];
-    lines.push( new Line( hex.q, hex.r, 0));
-    lines.push( new Line( hex.q, hex.r, 1));
-    lines.push( new Line( hex.q, hex.r, 2));
-    lines.push( new Line( Hex.directions[3].q + hex.q, Hex.directions[3].r + hex.r, 0));
-    lines.push( new Line( Hex.directions[4].q + hex.q, Hex.directions[4].r + hex.r, 1));
-    lines.push( new Line( Hex.directions[5].q + hex.q, Hex.directions[5].r + hex.r, 2));
-    return lines;
-}
-
-function getLineSides( line: Line) : Hex[] {
-    return [ new Hex( line.q, line.r), new Hex( line.q + Hex.directions[line.dir].q, line.r + Hex.directions[line.dir].r)];
-}
-
-function getLineEnds( line: Line) : Hex[] {
-    return [new Hex( line.q + Hex.directions[(line.dir + 1) % 6].q, line.r + Hex.directions[(line.dir + 1) % 6].r),
-            new Hex( line.q + Hex.directions[(line.dir + 5) % 6].q, line.r + Hex.directions[(line.dir + 5) % 6].r)];
-}
-
-function getLineHexes( line: Line) : Hex[] {
-    return [new Hex( line.q, line.r),
-            new Hex( line.q + Hex.directions[line.dir].q, line.r + Hex.directions[line.dir].r),
-            new Hex( line.q + Hex.directions[(line.dir + 1) % 6].q, line.r + Hex.directions[(line.dir + 1) % 6].r),
-            new Hex( line.q + Hex.directions[(line.dir + 5) % 6].q, line.r + Hex.directions[(line.dir + 5) % 6].r),];
-}
-
-function getHexCorners( hex: Hex) : Corner[] {
-    let corners = [];
-    corners.push( new Corner( hex.q, hex.r, 0));
-    corners.push( new Corner( hex.q, hex.r, 1));
-    corners.push( new Corner( hex.q, hex.r, 2));
-    corners.push( new Corner( Hex.directions[3].q + hex.q, Hex.directions[3].r + hex.r, 0));
-    corners.push( new Corner( Hex.directions[4].q + hex.q, Hex.directions[4].r + hex.r, 1));
-    corners.push( new Corner( Hex.directions[5].q + hex.q, Hex.directions[5].r + hex.r, 2));
-    return corners;
-}
-
-function getCornerHexes( corner : Corner) : Hex[] {
-    return [new Hex( corner.q, corner.r),
-            new Hex( corner.q + Hex.directions[corner.dir].q, corner.r + Hex.directions[corner.dir].r),
-            new Hex( corner.q + Hex.directions[(corner.dir + 5) % 6].q, corner.r + Hex.directions[(corner.dir + 5) % 6].r)];
-}
-
-function hexKey( q : number, r: number) : number
-{
-    return q + r * 1000;
-}
-
-function lineKey( q: number, r: number, dir: number) : number
-{
-    return dir + hexKey(q,r) * 4; //dir is 0-2
-}
-
-function cornerKey( q: number, r: number, dir: number) : number
-{
-    return dir + hexKey(q,r) * 4; //dir is 0-2
-}
-*/
 // UI state
 var Lens;
 (function (Lens) {
@@ -599,7 +438,8 @@ function setLens(button) {
         lens = Lens[key];
     } });
     hexmap.refreshGfx();
-    hexmap.addTextToAllElements(button.value, button.value.toLowerCase());
+    if (lens > Lens.Height)
+        hexmap.addTextToAllElements(button.value, button.value.toLowerCase());
 }
 function removeLens() {
     lens = Lens.None;
@@ -611,19 +451,28 @@ var ChangeActionFlow = /** @class */ (function () {
     function ChangeActionFlow(action) {
         this.dude = null;
         this.target = null;
+        this.info = null; // extra action data
         this.action = CitizenAction.Idle;
-        this.targetIsOK = null; // return true if it's a valid target
-        this.onStart = null;
-        this.onConfirm = null;
-        this.onCancel = null;
         this.action = action;
     }
-    ChangeActionFlow.justHexes = function (target) {
-        return target instanceof Hex;
-    };
     return ChangeActionFlow;
 }());
 var currentAction = null;
+function confirmAction() {
+    if (currentAction != null) {
+        //TODO: Handle cancelling previous activity here
+        currentAction.dude.chosenAction = currentAction.action;
+        if (currentAction.target instanceof Hex)
+            currentAction.dude.assignedHex = currentAction.target;
+        else if (currentAction.target instanceof Line)
+            currentAction.dude.assignedLine = currentAction.target;
+        else if (currentAction.target instanceof Corner)
+            currentAction.dude.assignedCorner = currentAction.target;
+        currentAction.dude.actionStuff = currentAction.info;
+        currentAction = null;
+        citizensList.refreshGfx();
+    }
+}
 var selectedTile = [0, 0]; // Need to remember selected tile
 var tempElements = [];
 function clearTempElements() {
@@ -645,7 +494,7 @@ function setTileGfx(element, tile) {
             element.removeAttribute("class");
             element.removeAttribute("stroke");
             element.removeAttribute("stroke-width");
-            element.setAttribute("fill", rgbToHexa(tile.height * 50, tile.height * 50, tile.height * 50));
+            element.setAttribute("fill", rgbToHexa(0, 0, 0));
             break;
         case Lens.Energy:
             element.removeAttribute("class");
@@ -679,7 +528,7 @@ function setTileGfx(element, tile) {
     }
 }
 function setLineGfx(element, line) {
-    switch (line.built) {
+    switch (line.building) {
         case LineBuilding.Empty:
             element.setAttribute("class", "line-empty");
             break;
@@ -688,8 +537,8 @@ function setLineGfx(element, line) {
             break;
     }
 }
-function setCornerGfx(element, corner) {
-    switch (corner.built) {
+function setCornerGfx(element, data) {
+    switch (data.building) {
         case CornerBuilding.Empty:
             element.setAttribute("class", "corner-empty");
             break;
@@ -697,6 +546,12 @@ function setCornerGfx(element, corner) {
             element.setAttribute("class", "corner-power");
             break;
     }
+    if (lens == Lens.Height) {
+        element.removeAttribute("class");
+        element.setAttribute("fill", rgbToHexa(data.height * 50, data.height * 50, data.height * 50));
+    }
+    else
+        element.removeAttribute("fill");
 }
 function onSelectHex(hex) {
     hexmap.tileElements[hexKey(hex.q, hex.r)].classList.add("selected");
@@ -706,9 +561,9 @@ function onHexHovered(hex) {
     if (debugHexes) {
         var tile = hexmap.tiles[hexKey(hex.q, hex.r)];
         var text = "(" + hex.q + "," + hex.r + ")";
-        if (tile.height > 0) {
-            text += " h:" + tile.height;
-        }
+        //if (tile.height > 0) {
+        //    text += ` h:${tile.height}`;
+        //}
         if (tile.humidity > 0) {
             text += " w:" + tile.humidity;
         }
@@ -749,7 +604,6 @@ function onLineHovered(line) {
             tempElements.push(neighbourTextElement);
         });
     }
-    //BUG: Getting error hovering over edge lines
     hexmap.lineElements[lineKey(line.q, line.r, line.dir)].classList.add("line-hover");
 }
 function onCornerHovered(corner) {
@@ -772,11 +626,22 @@ function onHexClicked(hex) {
     hexmap.selectHex(hex.q, hex.r);
     game.selectedTypeElement.textContent = "Type: Hex";
     game.slectedPositionElement.textContent = "Position: " + hex.q + "," + hex.r + ",";
-    game.selectedHeightElement.textContent = "Height: " + hexmap.tiles[hexKey(hex.q, hex.r)].height;
+    //game.selectedHeightElement.textContent = "Height: "     + hexmap.tiles[hexKey(hex.q,hex.r)].height;
     game.selectedWaterElement.textContent = "Is Water source: " + hexmap.tiles[hexKey(hex.q, hex.r)].water;
     game.selectedHumidityElement.textContent = "Humidity: " + hexmap.tiles[hexKey(hex.q, hex.r)].humidity;
     var tox = hexmap.tiles[hexKey(hex.q, hex.r)].toxicity;
     game.selectedToxicityElement.textContent = "Toxicity: " + getToxicityLevel(tox) + " (" + tox + ")";
+    game.actionMenuElement.classList.remove("hidden");
+    while (game.actionMenuElement.firstChild) {
+        game.actionMenuElement.removeChild(game.actionMenuElement.firstChild);
+    }
+    if (hexmap.tiles[hexKey(hex.q, hex.r)].toxicity > 0) {
+        addDropdownChild(game.actionMenuElement, "Clear Toxicity", function () {
+            currentAction = new ChangeActionFlow(CitizenAction.ClearToxicity);
+            currentAction.target = hex;
+            citizensList.refreshGfx();
+        });
+    }
 }
 function onLineClicked(line) {
     game.selectedTypeElement.textContent = "Type: Edge";
@@ -785,6 +650,16 @@ function onLineClicked(line) {
     game.selectedWaterElement.textContent = "";
     game.selectedHumidityElement.textContent = "";
     game.selectedToxicityElement.textContent = "";
+    game.actionMenuElement.classList.remove("hidden");
+    while (game.actionMenuElement.firstChild) {
+        game.actionMenuElement.removeChild(game.actionMenuElement.firstChild);
+    }
+    addDropdownChild(game.actionMenuElement, "Build Waterway", function () {
+        currentAction = new ChangeActionFlow(CitizenAction.Build);
+        currentAction.target = line;
+        currentAction.info = LineBuilding.Waterway;
+        citizensList.refreshGfx();
+    });
 }
 ;
 function onCornerClicked(corner) {
@@ -794,6 +669,7 @@ function onCornerClicked(corner) {
     game.selectedWaterElement.textContent = "";
     game.selectedHumidityElement.textContent = "";
     game.selectedToxicityElement.textContent = "";
+    game.actionMenuElement.classList.add("hidden");
 }
 ;
 function toggleDebug() {
@@ -807,11 +683,12 @@ function toggleDebug() {
 var TileData = /** @class */ (function () {
     function TileData() {
         this.coords = null;
-        this.height = 0;
         this.water = false; // If it is a water source or not
         this.humidity = 0; // The humidity level of the tile 0 - 5
         this.toxicity = 0;
         this.energy = 0;
+        this.building = TileBuilding.Empty;
+        this.buildingData = null; // this will hold info about the building
     }
     TileData.toxicTile = function () {
         var tile = new TileData();
@@ -832,7 +709,7 @@ var TileData = /** @class */ (function () {
     TileData.makeRandomTile = function () {
         var funcs = [TileData.toxicTile, TileData.waterTile, TileData.landTile];
         var tile = funcs[Math.floor(Math.random() * funcs.length)]();
-        tile.height = Math.floor(Math.random() * 5);
+        //tile.height = Math.floor(Math.random() * 5);
         return tile;
     };
     return TileData;
@@ -840,14 +717,15 @@ var TileData = /** @class */ (function () {
 var LineData = /** @class */ (function () {
     function LineData() {
         this.coords = null;
-        this.built = LineBuilding.Empty;
+        this.building = LineBuilding.Empty;
     }
     return LineData;
 }());
 var CornerData = /** @class */ (function () {
     function CornerData() {
         this.coords = null;
-        this.built = CornerBuilding.Empty;
+        this.building = CornerBuilding.Empty;
+        this.height = 0;
     }
     return CornerData;
 }());
@@ -872,6 +750,12 @@ var HexMap = /** @class */ (function () {
                     this.addNewTile(x, y, TileData.makeRandomTile());
                 }
             }
+        }
+        // pick a few corners to set their height randomly
+        var bla = Object.keys(this.corners);
+        for (var i = 0; i < 50; i++) {
+            var corner = this.corners[bla[randInt(0, bla.length - 1)]];
+            corner.height = randInt(0, 5);
         }
     };
     HexMap.prototype.addTextToElement = function (element, text) {
@@ -1022,7 +906,7 @@ var HexMap = /** @class */ (function () {
         }
         // hex corners (only on the inside of the map)
         var hexCorners = getHexCorners(hex);
-        for (var cornerNum = 0; cornerNum < 3; cornerNum++) // only 3 corners since other 3 are covered by other hexes
+        for (var cornerNum = 0; cornerNum < 2; cornerNum++) // only 2 corners since other 4 are covered by other hexes
          {
             var keepCorner = true;
             var corner = hexCorners[cornerNum];
@@ -1044,7 +928,9 @@ var HexMap = /** @class */ (function () {
 var Citizen = /** @class */ (function () {
     function Citizen() {
         this.name = "ph_name";
-        this.assignedTile = null;
+        this.assignedHex = null;
+        this.assignedLine = null;
+        this.assignedCorner = null;
         this.chosenAction = CitizenAction.Idle;
         this.actionStuff = null; // this will hold info about the status of build actions
     }
@@ -1053,8 +939,6 @@ var Citizen = /** @class */ (function () {
 var CitizensList = /** @class */ (function () {
     function CitizensList() {
         this.citizens = [];
-        //CRB: This doesn't work because it's called in the constructor, but the html hasn't finished loading. Need to wait for onload
-        //this.table = document.getElementById("citizens_table") as HTMLTableElement;
     }
     CitizensList.prototype.initUI = function () {
         this.table = document.getElementById("citizens_table");
@@ -1062,6 +946,15 @@ var CitizensList = /** @class */ (function () {
     };
     CitizensList.prototype.loadCitizens = function (citizens) {
         this.citizens = citizens;
+        for (var i = 0; i < this.citizens.length; i++) {
+            var citizen = this.citizens[i];
+            if (citizen.assignedHex != null)
+                citizen.assignedHex = new Hex(citizen.assignedHex.q, citizen.assignedHex.r);
+            if (citizen.assignedLine != null)
+                citizen.assignedLine = new Line(citizen.assignedLine.q, citizen.assignedLine.r, citizen.assignedLine.dir);
+            if (citizen.assignedCorner != null)
+                citizen.assignedCorner = new Corner(citizen.assignedCorner.q, citizen.assignedCorner.r, citizen.assignedCorner.dir);
+        }
     };
     CitizensList.prototype.populateWithRandomCitizens = function () {
         this.citizens = [];
@@ -1078,15 +971,28 @@ var CitizensList = /** @class */ (function () {
                 case CitizenAction.Idle:
                     break;
                 case CitizenAction.ClearToxicity:
-                    if (citizen.assignedTile) {
-                        var tile = hexmap.tiles[hexKey(citizen.assignedTile.q, citizen.assignedTile.r)];
-                        if (tile.toxicity > 0) {
-                            tile.toxicity = Math.max(tile.toxicity - toxicityPerTurn * 10, 0);
-                        }
+                    var tile = hexmap.tiles[hexKey(citizen.assignedHex.q, citizen.assignedHex.r)];
+                    if (tile.toxicity > 0) {
+                        tile.toxicity = Math.max(tile.toxicity - toxicityPerTurn * 10, 0);
                     }
                     break;
                 case CitizenAction.Build:
-                    //TODO: Add work to building
+                    if (citizen.assignedHex) {
+                        var tile_1 = hexmap.tiles[hexKey(citizen.assignedHex.q, citizen.assignedHex.r)];
+                        tile_1.building = citizen.actionStuff;
+                        citizen.assignedHex = null;
+                    }
+                    if (citizen.assignedLine) {
+                        var line = hexmap.lines[lineKey(citizen.assignedLine.q, citizen.assignedLine.r, citizen.assignedLine.dir)];
+                        line.building = citizen.actionStuff;
+                        citizen.assignedLine = null;
+                    }
+                    if (citizen.assignedCorner) {
+                        var corner = hexmap.corners[cornerKey(citizen.assignedCorner.q, citizen.assignedCorner.r, citizen.assignedCorner.dir)];
+                        corner.building = citizen.actionStuff;
+                        citizen.assignedCorner = null;
+                    }
+                    citizen.chosenAction = CitizenAction.Idle;
                     break;
                 case CitizenAction.Harvest:
                     //TODO: Generate stuff based on assigned tile
@@ -1096,7 +1002,6 @@ var CitizensList = /** @class */ (function () {
     };
     CitizensList.prototype.refreshGfx = function () {
         //TODO: Don't rebuild every frame
-        var _this = this;
         // clearTable
         for (var i = 0; i < this.citizens.length; i++) {
             this.table.deleteRow(-1);
@@ -1108,44 +1013,33 @@ var CitizensList = /** @class */ (function () {
             var cell2 = row.insertCell(1);
             var cell3 = row.insertCell(2);
             cell1.innerHTML = citizen.name;
-            cell2.innerHTML = citizen.assignedTile ? citizen.assignedTile[0] + "," + citizen.assignedTile[1] : "Idle";
-            cell3.innerHTML = "Alive"; // status used to go here
-            // action stuff
-            var actionCell = row.insertCell(3);
-            var container = document.createElement("div");
-            container.classList.add("btn-group");
-            actionCell.appendChild(container);
-            var actionButton = document.createElement("button");
-            actionButton.type = "button";
-            actionButton.classList.add("btn", "btn-primary", "btn-sm");
-            actionButton.textContent = CitizenAction[citizen.chosenAction].toString();
-            container.appendChild(actionButton);
-            var dropdownButton = document.createElement("button");
-            dropdownButton.type = "button";
-            dropdownButton.classList.add("btn", "btn-primary", "btn-sm", "dropdown-toggle", "dropdown-toggle-split");
-            dropdownButton.dataset.toggle = "dropdown";
-            dropdownButton.setAttribute("aria-haspopup", "true");
-            dropdownButton.setAttribute("aria-expanded", "false");
-            container.appendChild(dropdownButton);
-            var dropdownSpan = document.createElement("span");
-            dropdownSpan.classList.add("sr-only");
-            dropdownSpan.textContent = "Toggle Dropdown";
-            dropdownButton.appendChild(dropdownSpan);
-            var dropdownMenu = document.createElement("div");
-            dropdownMenu.classList.add("dropdown-menu");
-            container.appendChild(dropdownMenu);
-            var _loop_5 = function (j) {
-                if (j == citizen.chosenAction)
-                    return "continue";
-                addDropdownChild(dropdownMenu, CitizenAction[j], function () {
-                    citizen.chosenAction = j;
-                    //TODO: Set action choose target state
-                    _this.refreshGfx();
-                });
-            };
-            for (var j = 0; j < CitizenAction.Count; j++) {
-                _loop_5(j);
+            cell2.innerHTML = CitizenAction[citizen.chosenAction].toString();
+            if (currentAction != null) {
+                var actionButton = document.createElement("button");
+                actionButton.type = "button";
+                actionButton.classList.add("btn", "btn-primary", "btn-sm");
+                actionButton.textContent = "Pick Me !";
+                actionButton.onclick = function () { currentAction.dude = citizen; confirmAction(); };
+                cell3.appendChild(actionButton);
             }
+            else
+                cell3.innerHTML = "Alive"; // status used to go here
+            row.onmouseenter = function () {
+                if (citizen.assignedHex != null)
+                    onHexHovered(citizen.assignedHex);
+                if (citizen.assignedLine != null)
+                    onLineHovered(citizen.assignedLine);
+                if (citizen.assignedCorner != null)
+                    onCornerHovered(citizen.assignedCorner);
+            };
+            row.onmouseleave = function () {
+                if (citizen.assignedHex != null)
+                    hexmap.tileElements[hexKey(citizen.assignedHex.q, citizen.assignedHex.r)].classList.remove("hover");
+                if (citizen.assignedLine != null)
+                    hexmap.lineElements[lineKey(citizen.assignedLine.q, citizen.assignedLine.r, citizen.assignedLine.dir)].classList.remove("line-hover");
+                if (citizen.assignedCorner != null)
+                    hexmap.cornerElements[cornerKey(citizen.assignedCorner.q, citizen.assignedCorner.r, citizen.assignedCorner.dir)].classList.remove("corner-hover");
+            };
         };
         var this_4 = this;
         // fill it based on citizens
@@ -1199,17 +1093,33 @@ var Game = /** @class */ (function () {
             console.log("No saved data found. Generating new random one.");
             citizensList.populateWithRandomCitizens();
             hexmap.populateWithRandomTiles();
+            resources.polymers = 100;
+            resources.metals = 125;
         }
         else {
             var saveJson = JSON.parse(saveString);
             console.log("Loaded saved data from " + saveName + ".");
             citizensList.loadCitizens(saveJson.citizens);
-            hexmap.tiles = saveJson.tiles;
+            for (var key in saveJson.tiles) {
+                var tile = saveJson.tiles[key];
+                tile.coords = new Hex(tile.coords.q, tile.coords.r);
+                hexmap.tiles[key] = tile;
+            }
             hexmap.lines = saveJson.lines;
+            for (var key in hexmap.lines) {
+                var line = hexmap.lines[key];
+                line.coords = new Line(line.coords.q, line.coords.r, line.coords.dir);
+            }
             hexmap.corners = saveJson.corners;
+            for (var key in hexmap.corners) {
+                var corner = hexmap.corners[key];
+                corner.coords = new Corner(corner.coords.q, corner.coords.r, corner.coords.dir);
+            }
+            Object.assign(resources, saveJson.resources);
         }
         citizensList.refreshGfx();
         hexmap.refreshGfx();
+        resources.refreshGfx();
     };
     Game.prototype.saveState = function () {
         var saveName = "save1";
@@ -1217,7 +1127,8 @@ var Game = /** @class */ (function () {
             citizens: citizensList.citizens,
             tiles: hexmap.tiles,
             lines: hexmap.lines,
-            corners: hexmap.corners
+            corners: hexmap.corners,
+            resources: resources,
         };
         var saveString = JSON.stringify(saveJson);
         localStorage.setItem(saveName, saveString);
@@ -1234,6 +1145,7 @@ var Game = /** @class */ (function () {
         this.selectedWaterElement = document.getElementById("selected_water");
         this.selectedHumidityElement = document.getElementById("selected_humidity");
         this.selectedToxicityElement = document.getElementById("selected_toxicity");
+        this.actionMenuElement = document.getElementById("action_menu");
         document.getElementById("restart").onclick = function () { _this.resetState(); };
         document.getElementById("savegame").onclick = function () { _this.saveState(); };
         document.getElementById("loadgame").onclick = function () { _this.loadState(); };
@@ -1256,6 +1168,7 @@ var Game = /** @class */ (function () {
                 }
             }
         }
+        citizensList.doCitizensTurn();
         citizensList.refreshGfx();
         hexmap.refreshGfx();
     };
@@ -1268,8 +1181,5 @@ var resources = new Resources;
 window.onload = function () {
     console.log("Loaded");
     game.init();
-    resources.addAmount("polymers", 100);
-    resources.addAmount("metals", 125);
-    resources.refreshGfx();
 };
 //# sourceMappingURL=game.js.map

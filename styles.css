@@ -63,12 +63,12 @@ g.land3 { fill: rgb(191, 157, 120); }
 }
 
 .line-empty {
-    stroke: rgba(92, 139, 168, 0.274);
+    stroke: rgba(92, 139, 168, 0.179);
     stroke-width: 12;
 }
 
 .line-waterway {
-    stroke: rgb(54, 89, 123);
+    stroke: rgb(113, 156, 199);
     stroke-width: 15;
 }
 
