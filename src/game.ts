@@ -1,9 +1,9 @@
 /// <reference path="./hex.ts" />
 /// <reference path="./utils.ts" />
 
+
 /* 
 TODO:
-    height per node instead of per-tile
     water flows down
     polluted/clean water
         water sources are polluted, pipe it to waste treatment to clean it
@@ -298,7 +298,7 @@ function onCornerHovered(corner: Corner) {
         });
     }
 
-    hexmap.cornerElements[lineKey(corner.q, corner.r, corner.dir)].classList.add("corner-hover");
+    hexmap.cornerElements[cornerKey(corner.q, corner.r, corner.dir)].classList.add("corner-hover");
 }
 
 function onHexClicked(hex: Hex) { 
@@ -351,7 +351,7 @@ function onLineClicked( line : Line) {
 function onCornerClicked( corner :Corner) {
     game.selectedTypeElement.textContent = "Type: Point" 
     game.slectedPositionElement.textContent = "Position: " + corner.q + "," + corner.r + "," + corner.dir;
-    game.selectedHeightElement.textContent = "";
+    game.selectedHeightElement.textContent = "Height: "     + hexmap.corners[cornerKey(corner.q,corner.r,corner.dir)].height;
     game.selectedWaterElement.textContent = "";
     game.selectedHumidityElement.textContent = ""
     game.selectedToxicityElement.textContent = "";
@@ -454,11 +454,29 @@ class HexMap
                 }
             }
         }
-        // pick a few corners to set their height randomly
-        let bla = Object.keys(this.corners);
-        for (let i = 0; i < 50; i++) {
-            let corner = this.corners[bla[randInt(0, bla.length - 1)]];
-            corner.height = randInt(0, 5);
+        // pick a few corners to change their height randomly
+        //TODO: We need to do this in a better way
+        for (let bla = 0; bla < 150; bla++)
+        {
+            let x = randInt(-this.mapRadius, this.mapRadius);
+            let y = randInt(-this.mapRadius, this.mapRadius);
+            if (Math.abs(x + y) > this.mapRadius) 
+                continue;
+            let randKey = cornerKey(x, y, randInt(0,1));
+            let corner = this.corners[randKey];
+            if (corner === undefined)
+                continue;
+            let heightMin = Math.max(0, corner.height - 1);
+            let heightMax = Math.min(5, corner.height + 1);
+            getCornerNeighbours(corner.coords).forEach( c => {
+                let neighbor = this.corners[cornerKey(c.q, c.r, c.dir)];
+                if (neighbor !== undefined) {
+                    heightMin = Math.max(heightMin, neighbor.height - 1);
+                    heightMax = Math.min(heightMax, neighbor.height + 1);
+                }
+            });
+            let height = randInt(heightMin, heightMax);
+            corner.height = height;
         }
     }
 
@@ -649,6 +667,7 @@ class HexMap
             // game logic data
             let cornerData = new CornerData();
             cornerData.coords = corner;
+            cornerData.height = 3;
             this.corners[cornerKey( corner.q, corner.r, corner.dir )] = cornerData;
         }
     }

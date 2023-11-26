@@ -357,7 +357,6 @@ function cornerKey(q, r, dir) {
 /// <reference path="./utils.ts" />
 /*
 TODO:
-    height per node instead of per-tile
     water flows down
     polluted/clean water
         water sources are polluted, pipe it to waste treatment to clean it
@@ -619,7 +618,7 @@ function onCornerHovered(corner) {
             tempElements.push(neighbourTextElement);
         });
     }
-    hexmap.cornerElements[lineKey(corner.q, corner.r, corner.dir)].classList.add("corner-hover");
+    hexmap.cornerElements[cornerKey(corner.q, corner.r, corner.dir)].classList.add("corner-hover");
 }
 function onHexClicked(hex) {
     selectedTile = [hex.q, hex.r];
@@ -665,7 +664,7 @@ function onLineClicked(line) {
 function onCornerClicked(corner) {
     game.selectedTypeElement.textContent = "Type: Point";
     game.slectedPositionElement.textContent = "Position: " + corner.q + "," + corner.r + "," + corner.dir;
-    game.selectedHeightElement.textContent = "";
+    game.selectedHeightElement.textContent = "Height: " + hexmap.corners[cornerKey(corner.q, corner.r, corner.dir)].height;
     game.selectedWaterElement.textContent = "";
     game.selectedHumidityElement.textContent = "";
     game.selectedToxicityElement.textContent = "";
@@ -744,6 +743,7 @@ var HexMap = /** @class */ (function () {
         this.setCamera(0, 0, 0.5);
     };
     HexMap.prototype.populateWithRandomTiles = function () {
+        var _this = this;
         for (var x = -this.mapRadius; x <= this.mapRadius; x++) {
             for (var y = -this.mapRadius; y <= this.mapRadius; y++) {
                 if (Math.abs(x + y) <= this.mapRadius) {
@@ -751,11 +751,31 @@ var HexMap = /** @class */ (function () {
                 }
             }
         }
-        // pick a few corners to set their height randomly
-        var bla = Object.keys(this.corners);
-        for (var i = 0; i < 50; i++) {
-            var corner = this.corners[bla[randInt(0, bla.length - 1)]];
-            corner.height = randInt(0, 5);
+        var _loop_1 = function (bla) {
+            var x = randInt(-this_1.mapRadius, this_1.mapRadius);
+            var y = randInt(-this_1.mapRadius, this_1.mapRadius);
+            if (Math.abs(x + y) > this_1.mapRadius)
+                return "continue";
+            var randKey = cornerKey(x, y, randInt(0, 1));
+            var corner = this_1.corners[randKey];
+            if (corner === undefined)
+                return "continue";
+            var heightMin = Math.max(0, corner.height - 1);
+            var heightMax = Math.min(5, corner.height + 1);
+            getCornerNeighbours(corner.coords).forEach(function (c) {
+                var neighbor = _this.corners[cornerKey(c.q, c.r, c.dir)];
+                if (neighbor !== undefined) {
+                    heightMin = Math.max(heightMin, neighbor.height - 1);
+                    heightMax = Math.min(heightMax, neighbor.height + 1);
+                }
+            });
+            var height = randInt(heightMin, heightMax);
+            corner.height = height;
+        };
+        var this_1 = this;
+        // pick a few corners to change their height randomly
+        for (var bla = 0; bla < 150; bla++) {
+            _loop_1(bla);
         }
     };
     HexMap.prototype.addTextToElement = function (element, text) {
@@ -791,8 +811,8 @@ var HexMap = /** @class */ (function () {
     HexMap.prototype.refreshGfx = function () {
         if (this.tileElements === undefined) {
             this.tileElements = {};
-            var _loop_1 = function (key) {
-                var tile = this_1.tiles[key];
+            var _loop_2 = function (key) {
+                var tile = this_2.tiles[key];
                 var hex = tile.coords;
                 // tile hex
                 var polygon = createSmallHexElement();
@@ -802,14 +822,14 @@ var HexMap = /** @class */ (function () {
                 // move everything toghether
                 var tileElement = document.createElementNS("http://www.w3.org/2000/svg", "g");
                 tileElement.appendChild(polygon);
-                var p = this_1.layout.getPixel(hex.q, hex.r);
+                var p = this_2.layout.getPixel(hex.q, hex.r);
                 tileElement.setAttribute("transform", "translate(" + p.x + "," + p.y + ")");
-                this_1.tileElements[hexKey(hex.q, hex.r)] = tileElement;
-                this_1.mapHtml.appendChild(tileElement);
+                this_2.tileElements[hexKey(hex.q, hex.r)] = tileElement;
+                this_2.mapHtml.appendChild(tileElement);
             };
-            var this_1 = this;
+            var this_2 = this;
             for (var key in this.tiles) {
-                _loop_1(key);
+                _loop_2(key);
             }
         }
         for (var key in this.tiles) {
@@ -819,20 +839,20 @@ var HexMap = /** @class */ (function () {
         }
         if (this.lineElements === undefined) {
             this.lineElements = {};
-            var _loop_2 = function (key) {
-                var lineData = this_2.lines[key];
+            var _loop_3 = function (key) {
+                var lineData = this_3.lines[key];
                 var line = lineData.coords;
-                var hexCenter = this_2.layout.getPixel(line.q, line.r);
+                var hexCenter = this_3.layout.getPixel(line.q, line.r);
                 var lineElement = createLineElement(hexCenter.x + hexPoints[line.dir].x, hexCenter.y + hexPoints[line.dir].y, hexCenter.x + hexPoints[line.dir + 1].x, hexCenter.y + hexPoints[line.dir + 1].y);
                 lineElement.onclick = function () { onLineClicked(line); };
                 lineElement.onmouseenter = function () { onLineHovered(line); };
                 lineElement.onmouseleave = function () { lineElement.classList.remove("line-hover"); };
-                this_2.lineElements[key] = lineElement;
-                this_2.mapHtml.appendChild(lineElement);
+                this_3.lineElements[key] = lineElement;
+                this_3.mapHtml.appendChild(lineElement);
             };
-            var this_2 = this;
+            var this_3 = this;
             for (var key in this.lines) {
-                _loop_2(key);
+                _loop_3(key);
             }
         }
         for (var key in this.lines) {
@@ -842,20 +862,20 @@ var HexMap = /** @class */ (function () {
         }
         if (this.cornerElements === undefined) {
             this.cornerElements = {};
-            var _loop_3 = function (key) {
-                var cornerData = this_3.corners[key];
+            var _loop_4 = function (key) {
+                var cornerData = this_4.corners[key];
                 var corner = cornerData.coords;
-                var hexCenter = this_3.layout.getPixel(corner.q, corner.r);
+                var hexCenter = this_4.layout.getPixel(corner.q, corner.r);
                 var pointElement = createCircleElement(hexCenter.x + hexPoints[corner.dir].x, hexCenter.y + hexPoints[corner.dir].y, 10);
                 pointElement.onclick = function () { onCornerClicked(corner); };
                 pointElement.onmouseenter = function () { onCornerHovered(corner); };
                 pointElement.onmouseleave = function () { pointElement.classList.remove("corner-hover"); };
-                this_3.cornerElements[key] = pointElement;
-                this_3.mapHtml.appendChild(pointElement);
+                this_4.cornerElements[key] = pointElement;
+                this_4.mapHtml.appendChild(pointElement);
             };
-            var this_3 = this;
+            var this_4 = this;
             for (var key in this.corners) {
-                _loop_3(key);
+                _loop_4(key);
             }
         }
         for (var key in this.corners) {
@@ -920,6 +940,7 @@ var HexMap = /** @class */ (function () {
             // game logic data
             var cornerData = new CornerData();
             cornerData.coords = corner;
+            cornerData.height = 3;
             this.corners[cornerKey(corner.q, corner.r, corner.dir)] = cornerData;
         }
     };
@@ -1006,9 +1027,9 @@ var CitizensList = /** @class */ (function () {
         for (var i = 0; i < this.citizens.length; i++) {
             this.table.deleteRow(-1);
         }
-        var _loop_4 = function (i) {
-            var citizen = this_4.citizens[i];
-            var row = this_4.table.insertRow(-1);
+        var _loop_5 = function (i) {
+            var citizen = this_5.citizens[i];
+            var row = this_5.table.insertRow(-1);
             var cell1 = row.insertCell(0);
             var cell2 = row.insertCell(1);
             var cell3 = row.insertCell(2);
@@ -1041,10 +1062,10 @@ var CitizensList = /** @class */ (function () {
                     hexmap.cornerElements[cornerKey(citizen.assignedCorner.q, citizen.assignedCorner.r, citizen.assignedCorner.dir)].classList.remove("corner-hover");
             };
         };
-        var this_4 = this;
+        var this_5 = this;
         // fill it based on citizens
         for (var i = 0; i < this.citizens.length; i++) {
-            _loop_4(i);
+            _loop_5(i);
         }
     };
     return CitizensList;
