@@ -45,7 +45,8 @@ enum LineBuilding {
 
 enum CornerBuilding {
     Empty,
-    PowerPoint //Hehe
+    PowerPoint, //Hehe
+    Pump
 };
 
 enum TileBuilding {
@@ -141,47 +142,33 @@ function clearTempElements() {
 
 function setTileGfx( element : Element, tile : TileData)
 {
+    element.removeAttribute("class");
     switch (lens) {
         case Lens.Humidity:
-            element.removeAttribute("class");
-            if (tile.water == true) {
-                element.setAttribute("fill", rgbToHexa(tile.humidity * 0, 250 - tile.humidity * 50, 250 - tile.humidity * 25));
-                element.setAttribute("stroke", rgbToHexa(250, 250, 250));
-                element.setAttribute("stroke-width", "1");
-            }
+            if (tile.water)
+                element.classList.add("water3");
             element.setAttribute("fill", rgbToHexa(tile.humidity * 0, 250 - tile.humidity * 50, 250 - tile.humidity * 25));
             break;
         case Lens.Pipes:
-            element.removeAttribute("class");
-            element.removeAttribute("stroke");
-            element.removeAttribute("stroke-width");
             if (tile.water)
                 element.classList.add("water3");
             break;
         case Lens.Energy:
-            element.removeAttribute("class");
-            element.removeAttribute("stroke");
-            element.removeAttribute("stroke-width");
             element.setAttribute("fill", rgbToHexa(0, 0, 0));
             break;
         case Lens.Toxicity:
-            element.removeAttribute("class");
-            element.removeAttribute("stroke");
-            element.removeAttribute("stroke-width");
             element.setAttribute("fill", rgbToHexa(tile.toxicity * 3 , tile.toxicity * 3 , tile.toxicity * 3));
             break;
         case Lens.None:
             element.removeAttribute("fill");
-            element.removeAttribute("stroke");
-            element.removeAttribute("stroke-width");
-            element.removeAttribute("class");
-            // type-specific style - we need to work a bit on this
+            if (tile.humidity > 0)
+                element.classList.add("humid");
             if (tile.toxicity > toxicityThresholds[0]) {
                 let toxicityLevel = getToxicityLevel(tile.toxicity);
                 element.classList.add("toxic" + clamp(toxicityLevel, 1, 4));
-            } else if (tile.humidity > 0) {
-                element.classList.add("humidity" + clamp(tile.humidity, 1, 5));
             } else {
+                if (tile.water)
+                    element.classList.add("water3");
                 element.classList.add("land"+ randInt(1, 3));
             }
 
@@ -196,7 +183,11 @@ function setLineGfx( element : Element, line : LineData)
             element.setAttribute("class", "line-empty");
             break;
         case LineBuilding.Waterway:
-            element.setAttribute("class", "line-waterway");
+            let hasWater = hexmap.wetPipes.has(lineKey(line.coords.q, line.coords.r, line.coords.dir));
+            if (hasWater)
+                element.setAttribute("class", "line-waterway")
+            else
+                element.setAttribute("class", "line-waterway-dry");
             break;
     }
 }
@@ -209,6 +200,9 @@ function setCornerGfx( element : Element, data : CornerData)
             break;
         case CornerBuilding.PowerPoint:
             element.setAttribute("class", "corner-power");
+            break;
+        case CornerBuilding.Pump:
+            element.setAttribute("class", "corner-pump");
             break;
     }
 
@@ -343,6 +337,16 @@ function onCornerHovered(corner: Corner) {
             hexmap.mapHtml.appendChild(neighbourTextElement);
             tempElements.push(neighbourTextElement);
         });
+
+        getCornerNeighbours(corner).forEach( (neighbor, index) => { 
+            let neighbourText = `${index}`;
+            let neighbourP = hexmap.layout.getPixel(neighbor.q, neighbor.r);
+            neighbourP = PtAdd( neighbourP, hexPoints[neighbor.dir]);
+            let neighbourTextElement = createTextElement(neighbourP.x, neighbourP.y, neighbourText);
+            neighbourTextElement.setAttribute("class", "debugText");
+            hexmap.mapHtml.appendChild(neighbourTextElement);
+            tempElements.push(neighbourTextElement);
+        });
     }
 
     hexmap.cornerElements[cornerKey(corner.q, corner.r, corner.dir)].classList.add("corner-hover");
@@ -379,7 +383,7 @@ function onLineClicked( line : Line) {
     game.selectedTypeElement.textContent = "Type: Edge" 
     game.slectedPositionElement.textContent = "Position: " + line.q + "," + line.r + "," + line.dir;
     game.selectedHeightElement.textContent = "Built: " + data.building.toString();
-    game.selectedWaterElement.textContent = "";
+    game.selectedWaterElement.textContent = hexmap.wetPipes.has(lineKey(line.q, line.r, line.dir)) ? "Water: Yes" : "Water: No";
     game.selectedHumidityElement.textContent = ""
     game.selectedToxicityElement.textContent = "";
 
@@ -404,7 +408,17 @@ function onCornerClicked( corner :Corner) {
     game.selectedHumidityElement.textContent = ""
     game.selectedToxicityElement.textContent = "";
 
-    game.actionMenuElement.classList.add("hidden");
+    game.actionMenuElement.classList.remove("hidden");
+    while (game.actionMenuElement.firstChild) {
+        game.actionMenuElement.removeChild(game.actionMenuElement.firstChild);
+    }
+
+    addDropdownChild(game.actionMenuElement, "Build Pump", () => {
+        currentAction = new ChangeActionFlow(CitizenAction.Build);
+        currentAction.target = corner;
+        currentAction.info = CornerBuilding.Pump;
+        citizensList.refreshGfx();
+    });
 };
 
 function toggleDebug() {
@@ -438,20 +452,18 @@ class TileData
     {
         let tile = new TileData();
         tile.water = true;
-        tile.humidity = 5;
         return tile;
     }
 
     static landTile() : TileData
     {
         let tile = new TileData();
-        tile.humidity = randInt(0,5);
         return tile;
     }
 
     public static makeRandomTile() : TileData
     {
-        let funcs = [ TileData.toxicTile, TileData.waterTile, TileData.landTile ];
+        let funcs = [ TileData.toxicTile, TileData.landTile, TileData.landTile ];
         let tile = funcs[Math.floor(Math.random() * funcs.length)]();
         //tile.height = Math.floor(Math.random() * 5);
         return tile;
@@ -479,6 +491,8 @@ class HexMap
     public tiles    : { [key: number]: TileData; } = {};
     public lines    : { [key: number]: LineData; } = {};
     public corners  : { [key: number]: CornerData; } = {};
+
+    public wetPipes = new Set<number>();
     
     // UI
     public layout = new Layout(Layout.flat, Pt(100,100), Pt(0,0));
@@ -502,6 +516,16 @@ class HexMap
                 }
             }
         }
+        // pick 3-5 water source tiles
+        for (let bla = 0; bla < randInt(3,5); bla++) {
+            let x = randInt(-this.mapRadius, this.mapRadius);
+            let y = randInt(-this.mapRadius, this.mapRadius);
+            if (Math.abs(x + y) > this.mapRadius) 
+                continue;
+            let tile = this.tiles[hexKey(x, y)];
+            tile.water = true;
+        }
+
         // pick a few corners to change their height randomly
         //TODO: We need to do this in a better way
         for (let bla = 0; bla < 150; bla++)
@@ -525,6 +549,61 @@ class HexMap
             });
             let height = randInt(heightMin, heightMax);
             corner.height = height;
+        }
+    }
+
+    workOutWaterFlow()
+    {
+        // start for corners of water tiles
+        let toVisit : CornerData[] = [];
+        for (let key in this.tiles) {
+            let tile = this.tiles[key];
+            if (tile.water == true) {
+                tile.humidity = 5;
+                getHexCorners(tile.coords).forEach( corner => { toVisit.push(this.corners[cornerKey(corner.q, corner.r, corner.dir)]); });
+            } 
+            else 
+                tile.humidity = 0;
+        }
+
+        // flow water from corner to corner, keeping a list of wet pipes
+        this.wetPipes.clear();
+        while (toVisit.length > 0) {
+            let corner = toVisit.pop();
+            if (corner === undefined)
+                continue;
+            let height = corner.height;
+            let hasPump = corner.building == CornerBuilding.Pump;
+            for (let n of getCornerNeighbours(corner.coords))
+            {
+                let neighbor = this.corners[cornerKey(n.q, n.r, n.dir)];
+                if (neighbor === undefined)
+                    continue;
+                let line = getLineBetweenCorners(corner.coords, n);
+                let lk = lineKey(line.q, line.r, line.dir);
+                if (this.wetPipes.has(lk))
+                    continue;
+                let lineData = this.lines[lk];
+                if (lineData === undefined || 
+                    lineData.building != LineBuilding.Waterway)
+                    continue;
+                if ( (height >= neighbor.height) || hasPump) {
+                    this.wetPipes.add(lk);
+                    toVisit.push(neighbor);
+                }
+            }
+        }
+
+        // now go through each line and set tile humidity if wet
+        for (let key of this.wetPipes.keys()) {
+            let line = this.lines[key];
+            for (let hex of getLineSides(line.coords)) {
+                let tile = this.tiles[hexKey(hex.q, hex.r)];
+                if (tile === undefined)
+                    continue;
+                tile.humidity = 5;
+                //TODO: Humidifiers go here
+            }
         }
     }
 
@@ -933,6 +1012,8 @@ class Game
             Object.assign(resources, saveJson.resources);
         }
 
+        hexmap.workOutWaterFlow();
+
         citizensList.refreshGfx();
         hexmap.refreshGfx();
         resources.refreshGfx();
@@ -978,12 +1059,12 @@ class Game
         document.getElementById("loadgame").onclick = () => { this.loadState(); };
         document.getElementById("toggledebug").onclick = () => { toggleDebug(); };
 
-        document.getElementById("nextturn").onclick = () => { this.nextTurn(); };
+        document.getElementById("nextturn").onclick = () => { this.endTurn(); };
 
         this.loadState();
     }
 
-    nextTurn() {
+    endTurn() {
         // spread toxicity
         for (let key in hexmap.tiles) {
             let tile = hexmap.tiles[key];
@@ -999,6 +1080,8 @@ class Game
         }
 
         citizensList.doCitizensTurn();
+
+        hexmap.workOutWaterFlow();
 
         citizensList.refreshGfx();
         hexmap.refreshGfx();

@@ -46,7 +46,7 @@ div {
 
 g.water1 { fill: rgba(0,212,255,1); }
 g.water2 { fill: rgba(75,124,254); }
-g.water3 { fill: rgba(9,9,121,1); }
+g.water3 { fill: rgb(31, 31, 73); }
 
 g.toxic1 { fill: rgba(222,75,254,1); }
 g.toxic2 { fill: rgba(182,62,229,1); }
@@ -57,6 +57,11 @@ g.land1 { fill: rgb(164, 191, 120); }
 g.land2 { fill: rgb(191, 187, 120); }
 g.land3 { fill: rgb(191, 157, 120); }
 
+g.humid {
+    stroke: rgb(0, 212, 255);
+    stroke-width: 3;
+}
+
 .hover {
     stroke: rgb(1, 238, 255);
     stroke-width: 5;
@@ -64,12 +69,17 @@ g.land3 { fill: rgb(191, 157, 120); }
 
 .line-empty {
     stroke: rgba(92, 139, 168, 0.179);
-    stroke-width: 12;
+    stroke-width: 8;
 }
 
 .line-waterway {
     stroke: rgb(113, 156, 199);
-    stroke-width: 15;
+    stroke-width: 12;
+}
+
+.line-waterway-dry {
+    stroke: rgb(130, 130, 130);
+    stroke-width: 12;
 }
 
 .line-hover{
@@ -84,8 +94,8 @@ g.land3 { fill: rgb(191, 157, 120); }
 .corner-power {
     fill: rgb(197, 149, 28);
 }
-.corner-water {
-    fill: rgb(0, 212, 255);
+.corner-pump {
+    fill: rgb(138, 161, 165);
 }
 
 .corner-hover{

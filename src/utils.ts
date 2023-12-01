@@ -179,6 +179,19 @@ function getCornerHexes( corner : Corner) : Hex[] {
         ];
 }
 
+function getCornerLines( corner : Corner) : Line[] {
+    if (corner.dir == 0)
+        return [new Line( corner.q, corner.r, 0),
+                new Line( corner.q, corner.r -1, 1),
+                new Line( corner.q, corner.r -1, 2)];
+    else if (corner.dir == 1)
+        return [new Line( corner.q, corner.r, 0),
+                new Line( corner.q, corner.r, 1),
+                new Line( corner.q+1,corner.r, 2)];
+    else
+        assert(false, "Invalid corner direction");
+}
+
 function getCornerNeighbours( corner : Corner) : Corner[] {
     if (corner.dir == 0)
         return [new Corner( corner.q, corner.r, 1),
@@ -193,9 +206,23 @@ function getCornerNeighbours( corner : Corner) : Corner[] {
 }
 
 function getLineBetweenCorners( c1 : Corner, c2 : Corner) : Line {
-    if (c2.dir == 0)
+    if (c2.dir == 0) {
+        let c = c1;
         c1 = c2;
+        c2 = c;        
+    }
     return new Line( c1.q, c2.r, c1.q - c2.q + c2.r - c1.r);
+}
+
+function getLineCorners(l :Line): Corner[]
+{
+    if (l.dir == 0)
+        return [ new Corner( l.q, l.r, 0), new Corner( l.q, l.r, 1)];
+    if (l.dir == 1)
+        return [ new Corner( l.q, l.r - 1, 0), new Corner( l.q, l.r, 1)];
+    if (l.dir == 2)
+        return [ new Corner( l.q, l.r - 1, 0), new Corner( l.q - 1, l.r, 1)];
+    assert(false, "Invalid line direction");
 }
 
 function hexKey( q : number, r: number) : number
