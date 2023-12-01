@@ -215,6 +215,40 @@ function setCornerGfx( element : Element, data : CornerData)
     {
         element.removeAttribute("class");
         element.setAttribute("fill", rgbToHexa(data.height * 50, data.height * 50, data.height * 50));
+
+        let thisPos = hexmap.layout.getPixel(data.coords.q, data.coords.r);
+        thisPos = PtAdd( thisPos, hexPoints[data.coords.dir]);
+        let thisKey = cornerKey( data.coords.q, data.coords.r, data.coords.dir);
+        for ( let neighbor of getCornerNeighbours( data.coords))
+        {
+            let neighborKey = cornerKey( neighbor.q, neighbor.r, neighbor.dir);
+            let neighborData = hexmap.corners[neighborKey];
+            if (neighborData === undefined)
+                continue;
+            if (data.height < neighborData.height)
+                continue;
+            if (data.height == neighborData.height &&
+                neighborKey < thisKey)
+                continue;
+            
+            let line = getLineBetweenCorners( data.coords, neighbor);
+            let lineData = hexmap.lines[lineKey(line.q, line.r, line.dir)];
+            
+            let neighborPos = hexmap.layout.getPixel(neighbor.q, neighbor.r);
+            neighborPos = PtAdd( neighborPos, hexPoints[neighbor.dir]);
+            let center = PtMultiply(PtAdd(thisPos, neighborPos), 0.5);
+            let direction = VectorAngleDeg( PtNormalize( PtAdd( PtMultiply( thisPos, -1), neighborPos)));
+            let arrow = (data.height == neighborData.height) ? createRectangle() : createArrowHead();
+            
+            arrow.setAttribute("transform", `translate(${center.x},${center.y}) rotate(${direction})`);
+            if (lineData.building == LineBuilding.Waterway)
+                arrow.classList.add("canal-pipe");
+            else
+                arrow.classList.add("canal-empty");
+            
+            hexmap.mapHtml.appendChild(arrow);
+            tempElements.push(arrow);
+        }
     } else
         element.removeAttribute("fill");
 }
@@ -466,13 +500,13 @@ class HexMap
             let corner = this.corners[randKey];
             if (corner === undefined)
                 continue;
-            let heightMin = Math.max(0, corner.height - 1);
-            let heightMax = Math.min(5, corner.height + 1);
+            let heightMin = Math.max(0, corner.height - 2);
+            let heightMax = Math.min(5, corner.height + 2);
             getCornerNeighbours(corner.coords).forEach( c => {
                 let neighbor = this.corners[cornerKey(c.q, c.r, c.dir)];
                 if (neighbor !== undefined) {
-                    heightMin = Math.max(heightMin, neighbor.height - 1);
-                    heightMax = Math.min(heightMax, neighbor.height + 1);
+                    heightMin = Math.max(heightMin, neighbor.height - 2);
+                    heightMax = Math.min(heightMax, neighbor.height + 2);
                 }
             });
             let height = randInt(heightMin, heightMax);

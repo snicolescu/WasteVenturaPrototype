@@ -5,6 +5,15 @@ class Point
     constructor (public x:number, public y:number) {}
 }
 
+function PtAdd(a:Point, b:Point):Point { return new Point(a.x + b.x, a.y + b.y); }
+function PtMultiply(a:Point, n:number):Point { return new Point(a.x * n, a.y * n); }
+function PtNormalize(a:Point):Point { return PtMultiply(a, 1.0 / Math.sqrt(a.x * a.x + a.y * a.y)); }
+
+function VectorAngleDeg(a:Point):number
+{
+    return Math.atan2(a.y, a.x) * (180.0 / Math.PI);
+}
+
 class Hex
 {
     constructor (public q:number, public r:number) {

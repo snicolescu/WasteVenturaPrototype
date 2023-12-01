@@ -80,6 +80,20 @@ function createCircleElement( x: number, y: number, radius :number) {
     return pointElement;
 }
 
+function createArrowHead() {
+    // <path d="M 0 0 l 20 20 l 0 -10 l 110.88457268119896 0 l -3 -10 l 3 -10 l -110.88457268119896 0 l 0 -10 Z" ></path>
+    var element = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+    //arrowElement.setAttribute("d", "M 0 0 l 20 20 l 0 -10 l 110.88457268119896 0 l -3 -10 l 3 -10 l -110.88457268119896 0 l 0 -10 Z");
+    element.setAttribute("points", "-20,-10 20,0 -20,10");
+    return element;
+}
+
+function createRectangle() {
+    var element = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+    element.setAttribute("points", "-20,-6 20,-6 20,6 -20,6");
+    return element;
+}
+
 function addDropdownChild( parent: Element, label: string, callback: () => void) {
     let dropdownItem1 = document.createElement("a");
     dropdownItem1.classList.add("dropdown-item");
@@ -176,6 +190,12 @@ function getCornerNeighbours( corner : Corner) : Corner[] {
             new Corner( corner.q + Hex.directions[2].q, corner.r + Hex.directions[2].r, 0),];
     else
         assert(false, "Invalid corner direction");
+}
+
+function getLineBetweenCorners( c1 : Corner, c2 : Corner) : Line {
+    if (c2.dir == 0)
+        c1 = c2;
+    return new Line( c1.q, c2.r, c1.q - c2.q + c2.r - c1.r);
 }
 
 function hexKey( q : number, r: number) : number

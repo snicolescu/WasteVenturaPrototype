@@ -6,6 +6,12 @@ var Point = /** @class */ (function () {
     }
     return Point;
 }());
+function PtAdd(a, b) { return new Point(a.x + b.x, a.y + b.y); }
+function PtMultiply(a, n) { return new Point(a.x * n, a.y * n); }
+function PtNormalize(a) { return PtMultiply(a, 1.0 / Math.sqrt(a.x * a.x + a.y * a.y)); }
+function VectorAngleDeg(a) {
+    return Math.atan2(a.y, a.x) * (180.0 / Math.PI);
+}
 var Hex = /** @class */ (function () {
     function Hex(q, r) {
         this.q = q;
@@ -249,6 +255,18 @@ function createCircleElement(x, y, radius) {
     pointElement.setAttribute("r", radius.toString());
     return pointElement;
 }
+function createArrowHead() {
+    // <path d="M 0 0 l 20 20 l 0 -10 l 110.88457268119896 0 l -3 -10 l 3 -10 l -110.88457268119896 0 l 0 -10 Z" ></path>
+    var element = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+    //arrowElement.setAttribute("d", "M 0 0 l 20 20 l 0 -10 l 110.88457268119896 0 l -3 -10 l 3 -10 l -110.88457268119896 0 l 0 -10 Z");
+    element.setAttribute("points", "-20,-10 20,0 -20,10");
+    return element;
+}
+function createRectangle() {
+    var element = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+    element.setAttribute("points", "-20,-6 20,-6 20,6 -20,6");
+    return element;
+}
 function addDropdownChild(parent, label, callback) {
     var dropdownItem1 = document.createElement("a");
     dropdownItem1.classList.add("dropdown-item");
@@ -343,6 +361,11 @@ function getCornerNeighbours(corner) {
             new Corner(corner.q + Hex.directions[2].q, corner.r + Hex.directions[2].r, 0),];
     else
         assert(false, "Invalid corner direction");
+}
+function getLineBetweenCorners(c1, c2) {
+    if (c2.dir == 0)
+        c1 = c2;
+    return new Line(c1.q, c2.r, c1.q - c2.q + c2.r - c1.r);
 }
 function hexKey(q, r) {
     return q + r * 1000;
@@ -548,6 +571,35 @@ function setCornerGfx(element, data) {
     if (lens == Lens.Height) {
         element.removeAttribute("class");
         element.setAttribute("fill", rgbToHexa(data.height * 50, data.height * 50, data.height * 50));
+        var thisPos = hexmap.layout.getPixel(data.coords.q, data.coords.r);
+        thisPos = PtAdd(thisPos, hexPoints[data.coords.dir]);
+        var thisKey = cornerKey(data.coords.q, data.coords.r, data.coords.dir);
+        for (var _i = 0, _a = getCornerNeighbours(data.coords); _i < _a.length; _i++) {
+            var neighbor = _a[_i];
+            var neighborKey = cornerKey(neighbor.q, neighbor.r, neighbor.dir);
+            var neighborData = hexmap.corners[neighborKey];
+            if (neighborData === undefined)
+                continue;
+            if (data.height < neighborData.height)
+                continue;
+            if (data.height == neighborData.height &&
+                neighborKey < thisKey)
+                continue;
+            var line = getLineBetweenCorners(data.coords, neighbor);
+            var lineData = hexmap.lines[lineKey(line.q, line.r, line.dir)];
+            var neighborPos = hexmap.layout.getPixel(neighbor.q, neighbor.r);
+            neighborPos = PtAdd(neighborPos, hexPoints[neighbor.dir]);
+            var center = PtMultiply(PtAdd(thisPos, neighborPos), 0.5);
+            var direction = VectorAngleDeg(PtNormalize(PtAdd(PtMultiply(thisPos, -1), neighborPos)));
+            var arrow = (data.height == neighborData.height) ? createRectangle() : createArrowHead();
+            arrow.setAttribute("transform", "translate(" + center.x + "," + center.y + ") rotate(" + direction + ")");
+            if (lineData.building == LineBuilding.Waterway)
+                arrow.classList.add("canal-pipe");
+            else
+                arrow.classList.add("canal-empty");
+            hexmap.mapHtml.appendChild(arrow);
+            tempElements.push(arrow);
+        }
     }
     else
         element.removeAttribute("fill");
@@ -760,13 +812,13 @@ var HexMap = /** @class */ (function () {
             var corner = this_1.corners[randKey];
             if (corner === undefined)
                 return "continue";
-            var heightMin = Math.max(0, corner.height - 1);
-            var heightMax = Math.min(5, corner.height + 1);
+            var heightMin = Math.max(0, corner.height - 2);
+            var heightMax = Math.min(5, corner.height + 2);
             getCornerNeighbours(corner.coords).forEach(function (c) {
                 var neighbor = _this.corners[cornerKey(c.q, c.r, c.dir)];
                 if (neighbor !== undefined) {
-                    heightMin = Math.max(heightMin, neighbor.height - 1);
-                    heightMax = Math.min(heightMax, neighbor.height + 1);
+                    heightMin = Math.max(heightMin, neighbor.height - 2);
+                    heightMax = Math.min(heightMax, neighbor.height + 2);
                 }
             });
             var height = randInt(heightMin, heightMax);
@@ -774,6 +826,7 @@ var HexMap = /** @class */ (function () {
         };
         var this_1 = this;
         // pick a few corners to change their height randomly
+        //TODO: We need to do this in a better way
         for (var bla = 0; bla < 150; bla++) {
             _loop_1(bla);
         }

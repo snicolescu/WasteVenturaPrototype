@@ -97,6 +97,20 @@ g.land3 { fill: rgb(191, 157, 120); }
     stroke-linecap: round; /* make the stroke ends rounded */
 }
 
+.canal-dry {
+    fill: rgba(157, 160, 161, 0.35);
+}
+.canal-watered {
+    fill: rgba(77, 176, 196, 0.35);
+}
+.canal-empty {
+    stroke-width: 1;
+}
+.canal-piped {
+    stroke-width: 5;
+}
+
+
 .debugText {
     font-size: 20px;
     font-family: monospace;
