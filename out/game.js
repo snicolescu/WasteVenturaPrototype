@@ -449,7 +449,7 @@ function getToxicityLevel(toxicity) {
 var Lens;
 (function (Lens) {
     Lens[Lens["None"] = 0] = "None";
-    Lens[Lens["Height"] = 1] = "Height";
+    Lens[Lens["Pipes"] = 1] = "Pipes";
     Lens[Lens["Humidity"] = 2] = "Humidity";
     Lens[Lens["Energy"] = 3] = "Energy";
     Lens[Lens["Toxicity"] = 4] = "Toxicity";
@@ -460,7 +460,7 @@ function setLens(button) {
         lens = Lens[key];
     } });
     hexmap.refreshGfx();
-    if (lens > Lens.Height)
+    if (lens > Lens.Pipes)
         hexmap.addTextToAllElements(button.value, button.value.toLowerCase());
 }
 function removeLens() {
@@ -512,11 +512,12 @@ function setTileGfx(element, tile) {
             }
             element.setAttribute("fill", rgbToHexa(tile.humidity * 0, 250 - tile.humidity * 50, 250 - tile.humidity * 25));
             break;
-        case Lens.Height:
+        case Lens.Pipes:
             element.removeAttribute("class");
             element.removeAttribute("stroke");
             element.removeAttribute("stroke-width");
-            element.setAttribute("fill", rgbToHexa(0, 0, 0));
+            if (tile.water)
+                element.classList.add("water3");
             break;
         case Lens.Energy:
             element.removeAttribute("class");
@@ -568,9 +569,20 @@ function setCornerGfx(element, data) {
             element.setAttribute("class", "corner-power");
             break;
     }
-    if (lens == Lens.Height) {
+    if (lens == Lens.Pipes) {
         element.removeAttribute("class");
-        element.setAttribute("fill", rgbToHexa(data.height * 50, data.height * 50, data.height * 50));
+        var gray = clamp(255 - data.height * 50, 0, 255);
+        element.setAttribute("fill", rgbToHexa(gray, gray, gray));
+        /*
+        for (let hex of getCornerHexes(data.coords))
+        {
+            let hexData = hexmap.tiles[hexKey(hex.q, hex.r)];
+            if (hexData === undefined)
+                continue;
+            if (hexData.water)
+                element.classList.add("corner-water");
+        }
+        */
         var thisPos = hexmap.layout.getPixel(data.coords.q, data.coords.r);
         thisPos = PtAdd(thisPos, hexPoints[data.coords.dir]);
         var thisKey = cornerKey(data.coords.q, data.coords.r, data.coords.dir);
@@ -594,7 +606,7 @@ function setCornerGfx(element, data) {
             var arrow = (data.height == neighborData.height) ? createRectangle() : createArrowHead();
             arrow.setAttribute("transform", "translate(" + center.x + "," + center.y + ") rotate(" + direction + ")");
             if (lineData.building == LineBuilding.Waterway)
-                arrow.classList.add("canal-pipe");
+                arrow.classList.add("canal-piped");
             else
                 arrow.classList.add("canal-empty");
             hexmap.mapHtml.appendChild(arrow);
@@ -695,9 +707,10 @@ function onHexClicked(hex) {
     }
 }
 function onLineClicked(line) {
+    var data = hexmap.lines[lineKey(line.q, line.r, line.dir)];
     game.selectedTypeElement.textContent = "Type: Edge";
     game.slectedPositionElement.textContent = "Position: " + line.q + "," + line.r + "," + line.dir;
-    game.selectedHeightElement.textContent = "";
+    game.selectedHeightElement.textContent = "Built: " + data.building.toString();
     game.selectedWaterElement.textContent = "";
     game.selectedHumidityElement.textContent = "";
     game.selectedToxicityElement.textContent = "";

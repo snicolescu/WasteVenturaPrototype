@@ -84,6 +84,9 @@ g.land3 { fill: rgb(191, 157, 120); }
 .corner-power {
     fill: rgb(197, 149, 28);
 }
+.corner-water {
+    fill: rgb(0, 212, 255);
+}
 
 .corner-hover{
     stroke: rgb(1, 238, 255);
@@ -107,7 +110,7 @@ g.land3 { fill: rgb(191, 157, 120); }
     stroke-width: 1;
 }
 .canal-piped {
-    stroke-width: 5;
+    stroke-width: 3;
 }
 
 
