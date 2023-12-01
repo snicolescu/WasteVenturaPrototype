@@ -4,30 +4,25 @@
 
 /* 
 TODO:
-    water flows down
+    merge hexmap into game class
+    click lenses to have them stay on
+    show citizens on worked tiles
+
+    merge all gfx from onHovered into refreshGfx
+    action cleanup
+        show build in progress
+        add dropdown for choosing citizen
+        cancel button
+        prevent selecting other tile
     polluted/clean water
         water sources are polluted, pipe it to waste treatment to clean it
         pump clean water out
         you can't cross water pipes with other pipes
+    add a minimap that moves the map around
 
-    show citizen on tile
-    cancel action
-
-    spawn small number of toxic and water tiles
-    add UI for tooltips
-    add building logic
-        choose citizen to build
-
-Game
-- build waterways on edges
-- water flowing logic
-- tile watered state based on waterways
-
-UI
-- cleanup placeholder panels and buttons
-- add elements (hex, line and corner) in separate layers so they draw and click correctly
-    This means they need to be added in abs coordinates
-- add a minimap that moves the map around
+Gameplay
+    humidifiers
+    power system ()
 
 */
 
@@ -446,34 +441,6 @@ class TileData
     public energy       : number = 0;
     public building     : TileBuilding = TileBuilding.Empty;
     public buildingData : any = null; // this will hold info about the building
-
-    static toxicTile() : TileData
-    {
-        let tile = new TileData();
-        tile.toxicity = toxicityThresholds[randInt(0,3)];
-        return tile;
-    }
-
-    static waterTile() : TileData
-    {
-        let tile = new TileData();
-        tile.water = true;
-        return tile;
-    }
-
-    static landTile() : TileData
-    {
-        let tile = new TileData();
-        return tile;
-    }
-
-    public static makeRandomTile() : TileData
-    {
-        let funcs = [ TileData.toxicTile, TileData.landTile, TileData.landTile ];
-        let tile = funcs[Math.floor(Math.random() * funcs.length)]();
-        //tile.height = Math.floor(Math.random() * 5);
-        return tile;
-    }
 }
 
 class LineData
@@ -515,10 +482,14 @@ class HexMap
 
     populateWithRandomTiles()
     {
+        this.tiles = {};
+        this.lines = {};
+        this.corners = {};
+
         for (let x = -this.mapRadius; x <= this.mapRadius; x++) {
             for (let y = -this.mapRadius; y <= this.mapRadius; y++) {
                 if (Math.abs(x + y) <= this.mapRadius) {
-                    this.addNewTile( x, y, TileData.makeRandomTile());
+                    this.addNewTile( x, y, new TileData());
                 }
             }
         }
@@ -530,6 +501,16 @@ class HexMap
                 continue;
             let tile = this.tiles[hexKey(x, y)];
             tile.water = true;
+        }
+
+        // pick 3-5 toxic source tiles
+        for (let bla = 0; bla < randInt(3,5); bla++) {
+            let x = randInt(-this.mapRadius, this.mapRadius);
+            let y = randInt(-this.mapRadius, this.mapRadius);
+            if (Math.abs(x + y) > this.mapRadius) 
+                continue;
+            let tile = this.tiles[hexKey(x, y)];
+            tile.toxicity = toxicityThresholds[randInt(1,3)];
         }
 
         // pick a few corners to change their height randomly
@@ -777,31 +758,39 @@ class HexMap
         for (let lineNum = 0; lineNum < 6; lineNum++)
         {
             let line = hexLines[lineNum];
-            if ( lineNum < 3 || !this.isHexInMap( line.q, line.r) )
-            {
-                let lineData = new LineData();
-                lineData.coords = line;
-                this.lines[lineKey(line.q, line.r, line.dir)] = lineData;
-            }
+            let numNeighbours = 0;
+            for ( let hex of getLineSides(line) )
+                if ( this.isHexInMap( hex.q, hex.r) )
+                    numNeighbours++
+            if (numNeighbours < 2)
+                continue;
+            let key = lineKey( line.q, line.r, line.dir );
+            if (this.lines[key] !== undefined)
+                continue;
+            let lineData = new LineData();
+            lineData.coords = line;
+            this.lines[lineKey(line.q, line.r, line.dir)] = lineData;
         }
 
         // hex corners (only on the inside of the map)
         let hexCorners = getHexCorners(hex);
-        for (let cornerNum = 0; cornerNum < 2; cornerNum++) // only 2 corners since other 4 are covered by other hexes
+        for (let cornerNum = 0; cornerNum < 6; cornerNum++) // only 2 corners since other 4 are covered by other hexes
         {
-            let keepCorner = true;
             let corner = hexCorners[cornerNum];
+            let numNeighbours = 0;
             for ( let hex of getCornerHexes(corner) )
-                if ( !this.isHexInMap( hex.q, hex.r) )
-                    keepCorner = false;
-            if (!keepCorner)
+                if ( this.isHexInMap( hex.q, hex.r) )
+                    numNeighbours++
+            if (numNeighbours < 2)
                 continue;
-
+            let key = cornerKey( corner.q, corner.r, corner.dir );
+            if (this.corners[key] !== undefined)
+                continue;
             // game logic data
             let cornerData = new CornerData();
             cornerData.coords = corner;
             cornerData.height = 3;
-            this.corners[cornerKey( corner.q, corner.r, corner.dir )] = cornerData;
+            this.corners[key] = cornerData;
         }
     }
 }
