@@ -546,7 +546,12 @@ function setTileGfx(element, tile) {
             else {
                 if (tile.water)
                     element.classList.add("water3");
-                element.classList.add("land" + randInt(1, 3));
+                else {
+                    if (tile.humidity > 0)
+                        element.classList.add("land" + randInt(1, 3));
+                    else
+                        element.classList.add("land-dry" + randInt(1, 3));
+                }
             }
             break;
     }
