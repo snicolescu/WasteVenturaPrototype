@@ -122,7 +122,9 @@ function confirmAction() {
             currentAction.dude.assignedCorner = currentAction.target;
         currentAction.dude.actionStuff = currentAction.info;
         currentAction = null;
+        citizensList.refreshWorked();
         citizensList.refreshGfx();
+        hexmap.refreshGfx();
     }
 }
 
@@ -138,58 +140,76 @@ function clearTempElements() {
 function setTileGfx( element : Element, tile : TileData)
 {
     element.removeAttribute("class");
-    switch (lens) {
-        case Lens.Humidity:
+    if (lens == Lens.None)
+    {
+        element.removeAttribute("fill");
+        if (tile.humidity > 0)
+            element.classList.add("humid");
+        // base color
+        if (tile.toxicity > toxicityThresholds[0]) {
+            let toxicityLevel = getToxicityLevel(tile.toxicity);
+            element.classList.add("toxic" + clamp(toxicityLevel, 1, 4));
+        } else {
             if (tile.water)
                 element.classList.add("water3");
-            element.setAttribute("fill", rgbToHexa(tile.humidity * 0, 250 - tile.humidity * 50, 250 - tile.humidity * 25));
-            break;
-        case Lens.Pipes:
-            if (tile.water)
-                element.classList.add("water3");
-            break;
-        case Lens.Energy:
-            element.setAttribute("fill", rgbToHexa(0, 0, 0));
-            break;
-        case Lens.Toxicity:
-            element.setAttribute("fill", rgbToHexa(tile.toxicity * 3 , tile.toxicity * 3 , tile.toxicity * 3));
-            break;
-        case Lens.None:
-            element.removeAttribute("fill");
-            if (tile.humidity > 0)
-                element.classList.add("humid");
-            if (tile.toxicity > toxicityThresholds[0]) {
-                let toxicityLevel = getToxicityLevel(tile.toxicity);
-                element.classList.add("toxic" + clamp(toxicityLevel, 1, 4));
-            } else {
+            else 
+            {
+                if (tile.humidity > 0)
+                    element.classList.add("land"+ randInt(1, 3));
+                else
+                    element.classList.add("land-dry"+ randInt(1, 3));
+            }
+        }
+        // buildings
+        let worker = citizensList.workedTiles.get(tile.coords);
+        if (worker !== undefined)
+        {
+            if (worker.chosenAction == CitizenAction.Build)
+                element.classList.add("under-construction");
+        }
+    } else 
+    {
+        switch (lens) {
+            case Lens.Humidity:
                 if (tile.water)
                     element.classList.add("water3");
-                else 
-                {
-                    if (tile.humidity > 0)
-                        element.classList.add("land"+ randInt(1, 3));
-                    else
-                        element.classList.add("land-dry"+ randInt(1, 3));
-                }
-            }
-
-            break;
+                element.setAttribute("fill", rgbToHexa(tile.humidity * 0, 250 - tile.humidity * 50, 250 - tile.humidity * 25));
+                break;
+            case Lens.Pipes:
+                if (tile.water)
+                    element.classList.add("water3");
+                break;
+            case Lens.Energy:
+                element.setAttribute("fill", rgbToHexa(0, 0, 0));
+                break;
+            case Lens.Toxicity:
+                element.setAttribute("fill", rgbToHexa(tile.toxicity * 3 , tile.toxicity * 3 , tile.toxicity * 3));
+                break;
+        }
     }
 }
 
-function setLineGfx( element : Element, line : LineData)
+function setLineGfx( element : Element, data : LineData)
 {
-    switch (line.building) {
+    
+    switch (data.building) {
         case LineBuilding.Empty:
             element.setAttribute("class", "line-empty");
             break;
-        case LineBuilding.Waterway:
-            let hasWater = hexmap.wetPipes.has(lineKey(line.coords.q, line.coords.r, line.coords.dir));
-            if (hasWater)
+            case LineBuilding.Waterway:
+                let hasWater = hexmap.wetPipes.has(lineKey(data.coords.q, data.coords.r, data.coords.dir));
+                if (hasWater)
                 element.setAttribute("class", "line-waterway")
             else
-                element.setAttribute("class", "line-waterway-dry");
-            break;
+            element.setAttribute("class", "line-waterway-dry");
+        break;
+    }
+
+    let worker = citizensList.workedLines.get(data.coords);
+    if (worker !== undefined)
+    {
+        if (worker.chosenAction == CitizenAction.Build)
+            element.classList.add("under-construction");
     }
 }
 
@@ -205,6 +225,13 @@ function setCornerGfx( element : Element, data : CornerData)
         case CornerBuilding.Pump:
             element.setAttribute("class", "corner-pump");
             break;
+    }
+
+    let worker = citizensList.workedCorners.get(data.coords);
+    if (worker !== undefined)
+    {
+        if (worker.chosenAction == CitizenAction.Build)
+            element.classList.add("under-construction");
     }
 
     if (lens == Lens.Pipes) 
@@ -246,7 +273,7 @@ function setCornerGfx( element : Element, data : CornerData)
             neighborPos = PtAdd( neighborPos, hexPoints[neighbor.dir]);
             let center = PtMultiply(PtAdd(thisPos, neighborPos), 0.5);
             let direction = VectorAngleDeg( PtNormalize( PtAdd( PtMultiply( thisPos, -1), neighborPos)));
-            let arrow = (data.height == neighborData.height) ? createRectangle() : createArrowHead();
+            let arrow = (data.height == neighborData.height) ? createRectangleElement(55, 14) : createArrowHead();
             
             arrow.setAttribute("transform", `translate(${center.x},${center.y}) rotate(${direction})`);
             if (lineData.building == LineBuilding.Waterway)
@@ -322,7 +349,7 @@ function onLineHovered(line: Line) {
         });
     }
 
-    hexmap.lineElements[lineKey(line.q, line.r, line.dir)].classList.add("line-hover");
+    hexmap.lineElements[lineKey(line.q, line.r, line.dir)].classList.add("hover");
 }
 
 function onCornerHovered(corner: Corner) {
@@ -350,7 +377,7 @@ function onCornerHovered(corner: Corner) {
         });
     }
 
-    hexmap.cornerElements[cornerKey(corner.q, corner.r, corner.dir)].classList.add("corner-hover");
+    hexmap.cornerElements[cornerKey(corner.q, corner.r, corner.dir)].classList.add("hover");
 }
 
 function onHexClicked(hex: Hex) { 
@@ -670,12 +697,16 @@ class HexMap
                 let line = lineData.coords;
 
                 let hexCenter = this.layout.getPixel( line.q, line.r);
-                let lineElement = createLineElement( 
+                //let lineElement = createLineElement( 
+                //    hexCenter.x + hexPoints[line.dir].x     , hexCenter.y + hexPoints[line.dir].y, 
+                //    hexCenter.x + hexPoints[line.dir + 1].x , hexCenter.y + hexPoints[line.dir + 1].y);
+                let lineElement = createSideElement( 
                     hexCenter.x + hexPoints[line.dir].x     , hexCenter.y + hexPoints[line.dir].y, 
-                    hexCenter.x + hexPoints[line.dir + 1].x , hexCenter.y + hexPoints[line.dir + 1].y);
+                    hexCenter.x + hexPoints[line.dir + 1].x , hexCenter.y + hexPoints[line.dir + 1].y,
+                    line.dir);
                 lineElement.onclick = () => { onLineClicked(line); };
                 lineElement.onmouseenter = () => { onLineHovered(line); };
-                lineElement.onmouseleave = () => { lineElement.classList.remove("line-hover") };
+                lineElement.onmouseleave = () => { lineElement.classList.remove("hover") };
 
                 this.lineElements[key] = lineElement;
                 this.mapHtml.appendChild(lineElement);
@@ -696,10 +727,10 @@ class HexMap
                 let corner = cornerData.coords;
 
                 let hexCenter = this.layout.getPixel( corner.q, corner.r);
-                let pointElement = createCircleElement( hexCenter.x + hexPoints[corner.dir].x, hexCenter.y + hexPoints[corner.dir].y, 10);
+                let pointElement = createCircleElement( hexCenter.x + hexPoints[corner.dir].x, hexCenter.y + hexPoints[corner.dir].y, 8);
                 pointElement.onclick = () => { onCornerClicked( corner); };
                 pointElement.onmouseenter = () => { onCornerHovered( corner); };
-                pointElement.onmouseleave = () => { pointElement.classList.remove("corner-hover") };
+                pointElement.onmouseleave = () => { pointElement.classList.remove("hover") };
 
                 this.cornerElements[key] = pointElement;
                 this.mapHtml.appendChild(pointElement);
@@ -814,6 +845,9 @@ class CitizensList
     // Game
     citizens: Citizen[];
 
+    workedTiles = new Map<Hex, Citizen>();
+    workedLines = new Map<Line, Citizen>();
+    workedCorners = new Map<Corner, Citizen>();
     // UI
     table: HTMLTableElement;
     rows: HTMLCollectionOf<HTMLTableRowElement>;
@@ -833,6 +867,23 @@ class CitizensList
                 citizen.assignedLine = new Line(citizen.assignedLine.q, citizen.assignedLine.r, citizen.assignedLine.dir);
             if (citizen.assignedCorner != null)
                 citizen.assignedCorner = new Corner(citizen.assignedCorner.q, citizen.assignedCorner.r, citizen.assignedCorner.dir);
+        }
+
+        this.refreshWorked();
+    }
+
+    refreshWorked() {
+        this.workedTiles.clear();
+        this.workedLines.clear();
+        this.workedCorners.clear();
+        for (let i = 0; i < this.citizens.length; i++) {
+            let citizen = this.citizens[i];
+            if (citizen.assignedHex != null)
+                this.workedTiles.set(citizen.assignedHex, citizen);
+            if (citizen.assignedLine != null)
+                this.workedLines.set(citizen.assignedLine, citizen);
+            if (citizen.assignedCorner != null)
+                this.workedCorners.set(citizen.assignedCorner, citizen);
         }
     }
 
@@ -881,6 +932,8 @@ class CitizensList
                     break;
             }
         }
+
+        this.refreshWorked();
     }
 
     refreshGfx() {
@@ -924,9 +977,9 @@ class CitizensList
                 if (citizen.assignedHex != null)
                     hexmap.tileElements[hexKey(citizen.assignedHex.q, citizen.assignedHex.r)].classList.remove("hover");
                 if (citizen.assignedLine != null)
-                    hexmap.lineElements[lineKey(citizen.assignedLine.q, citizen.assignedLine.r, citizen.assignedLine.dir)].classList.remove("line-hover");
+                    hexmap.lineElements[lineKey(citizen.assignedLine.q, citizen.assignedLine.r, citizen.assignedLine.dir)].classList.remove("hover");
                 if (citizen.assignedCorner != null)
-                    hexmap.cornerElements[cornerKey(citizen.assignedCorner.q, citizen.assignedCorner.r, citizen.assignedCorner.dir)].classList.remove("corner-hover");
+                    hexmap.cornerElements[cornerKey(citizen.assignedCorner.q, citizen.assignedCorner.r, citizen.assignedCorner.dir)].classList.remove("hover");
             };
         }
     }

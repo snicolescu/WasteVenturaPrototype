@@ -42,7 +42,36 @@ div {
     line-height: 26px;
 }
 
+.table td {
+    vertical-align: middle;
+}
+
 /* Waste ventura stuff */
+
+svg {
+    stroke-linecap : round;
+    stroke-linejoin: round;
+}
+
+svg circle, svg polygon {
+    stroke: rgb(50, 50, 55);
+}
+
+/* hover */
+
+.hover , .hover circle , .hover polygon {
+    stroke: rgb(215, 214, 214);
+    stroke-width: 6;
+}
+
+.selected, .selected circle, .selected polygon {
+    stroke: rgb(140, 205, 255);
+    stroke-width: 8;
+    stroke-dasharray: 5 10; /* add a dashed stroke */
+    stroke-linecap: round; /* make the stroke ends rounded */
+}
+
+ /* buildings */
 
 g.water1 { fill: rgba(0,212,255,1); }
 g.water2 { fill: rgba(75,124,254); }
@@ -65,52 +94,28 @@ g.humid {
     stroke-width: 3;
 }
 
-.hover {
-    stroke: rgb(1, 238, 255);
-    stroke-width: 5;
-}
-
 .line-empty {
-    stroke: rgba(92, 139, 168, 0.179);
-    stroke-width: 8;
+    fill: rgba(92, 139, 168, 0.179);
 }
 
 .line-waterway {
-    stroke: rgb(148 229 245);
-    stroke-width: 12;
+    fill: rgb(148 229 245);
 }
 
 .line-waterway-dry {
-    stroke: rgb(130, 130, 130);
-    stroke-width: 12;
+    fill: rgb(130, 130, 130);
 }
 
-.line-hover{
-    stroke: rgb(1, 238, 255);
-    stroke-width: 15;
-}
 
 .corner-empty {
-    fill: rgba(255, 255, 255, 0);
-    stroke: rgba(92, 139, 168, 0.274);
+    fill: rgba(92, 139, 168, 0.179);
+    /* stroke: rgba(92, 139, 168, 0.274); */
 }
 .corner-power {
     fill: rgb(197, 149, 28);
 }
 .corner-pump {
     fill: rgb(138, 161, 165);
-}
-
-.corner-hover{
-    stroke: rgb(1, 238, 255);
-    stroke-width: 2;
-}
-
-.selected{
-    stroke: rgb(255, 255, 255);
-    stroke-width: 4;
-    stroke-dasharray: 5 10; /* add a dashed stroke */
-    stroke-linecap: round; /* make the stroke ends rounded */
 }
 
 .canal-dry {
@@ -126,6 +131,14 @@ g.humid {
     stroke-width: 3;
 }
 
+.under-construction
+{
+    stroke: rgb(187, 84, 0);
+    stroke-width: 3;
+    stroke-dasharray: 5 10; /* add a dashed stroke */
+    stroke-linecap: round; /* make the stroke ends rounded */
+
+}
 
 .debugText {
     font-size: 20px;
@@ -141,8 +154,4 @@ g.humid {
     position: absolute;
     padding:0.75rem;
     z-index: 1;
-}
-
-.table td {
-    vertical-align: middle;
 }

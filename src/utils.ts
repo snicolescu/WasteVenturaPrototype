@@ -38,11 +38,6 @@ function createSmallHexElement() {
 
 function createLineElement(x1: number, y1: number, x2: number, y2: number) {
     var lineElement = document.createElementNS("http://www.w3.org/2000/svg", "line");
-    lineElement.setAttribute("x1", x1.toString());
-    lineElement.setAttribute("y1", y1.toString());
-    lineElement.setAttribute("x2", x2.toString());
-    lineElement.setAttribute("y2", y2.toString());
-    lineElement.setAttribute("stroke-width", "18");
     lineElement.setAttribute("stroke-linecap", "round");
 
     // Get the length of the line
@@ -62,6 +57,36 @@ function createLineElement(x1: number, y1: number, x2: number, y2: number) {
     lineElement.setAttribute("y2", newEndY.toString());
 
     return lineElement;
+}
+
+const dirFwdX = [
+    -Math.cos(Math.PI / 3),
+    -Math.cos(2 * Math.PI / 3),
+    -Math.cos(Math.PI),
+    -Math.cos(4 * Math.PI / 3),
+    -Math.cos(5 * Math.PI / 3),
+    -Math.cos(0),
+];
+
+const dirFwdY = [
+    Math.sin(Math.PI / 3),
+    Math.sin(2 * Math.PI / 3),
+    Math.sin(Math.PI),
+    Math.sin(4 * Math.PI / 3),
+    Math.sin(5 * Math.PI / 3),
+    Math.sin(0),
+];
+
+function createSideElement(x1: number, y1: number, x2: number, y2: number, dir:number) {
+    var element = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+    const wideX = dirFwdY[dir] * 5;
+    const wideY = -dirFwdX[dir] * 5;
+    x1 -= dirFwdX[dir] * 12;
+    y1 -= dirFwdY[dir] * 12;
+    x2 += dirFwdX[dir] * 12;
+    y2 += dirFwdY[dir] * 12;
+    element.setAttribute("points", `${x1 + wideX},${y1 + wideY} ${x1 - wideX},${y1 - wideY} ${x2 - wideX},${y2 - wideY} ${x2 + wideX},${y2 + wideY}`);
+    return element;
 }
 
 function createTextElement( x: number, y: number, text: string) {
@@ -88,9 +113,12 @@ function createArrowHead() {
     return element;
 }
 
-function createRectangle() {
+function createRectangleElement( width: number, height: number) {
     var element = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
-    element.setAttribute("points", "-20,-6 20,-6 20,6 -20,6");
+    
+    let halfWidth = width / 2;
+    let halfHeight = height / 2;
+    element.setAttribute("points", `-${halfWidth},-${halfHeight} ${halfWidth},-${halfHeight} ${halfWidth},${halfHeight} -${halfWidth},${halfHeight}`);
     return element;
 }
 
