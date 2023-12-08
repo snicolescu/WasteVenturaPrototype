@@ -68,6 +68,8 @@ function getToxicityLevel( toxicity: number) : number {
 
 // UI state
 
+let debugHexes = false;
+
 enum Lens {
     None,
     Pipes,
@@ -75,7 +77,6 @@ enum Lens {
     Energy,
     Toxicity
 }
-
 let lens = Lens.None;
 
 function setLens( button: HTMLInputElement)
@@ -83,7 +84,7 @@ function setLens( button: HTMLInputElement)
     Object.keys(Lens).forEach( key => { if (button.value == key) { lens = Lens[key]; } });
     hexmap.refreshGfx();
     if (lens > Lens.Pipes)
-        hexmap.addTextToAllElements( button.value, button.value.toLowerCase());
+    hexmap.addTextToAllElements( button.value, button.value.toLowerCase());
 }
 
 function removeLens()
@@ -93,15 +94,13 @@ function removeLens()
     hexmap.removeTextFromAllElements();
 }
 
-let debugHexes = false;
-
 class ChangeActionFlow
 {
     constructor( action: CitizenAction)
     {
         this.action = action;
     }
-
+    
     public dude? : Citizen = null;
     public target? : Hex | Line | Corner = null;
     public info? : any = null; // extra action data
@@ -128,7 +127,7 @@ function confirmAction() {
     }
 }
 
-let selectedTile:number[] = [0,0]; // Need to remember selected tile
+let selectedThing : Hex | Line | Corner = null;
 
 let tempElements : Element[] = [];
 
@@ -167,6 +166,9 @@ function setTileGfx( element : Element, tile : TileData)
             if (worker.chosenAction == CitizenAction.Build)
                 element.classList.add("under-construction");
         }
+
+        if (tile.coords === selectedThing)
+            element.classList.add("selected");
     } else 
     {
         switch (lens) {
@@ -191,7 +193,6 @@ function setTileGfx( element : Element, tile : TileData)
 
 function setLineGfx( element : Element, data : LineData)
 {
-    
     switch (data.building) {
         case LineBuilding.Empty:
             element.setAttribute("class", "line-empty");
@@ -211,6 +212,9 @@ function setLineGfx( element : Element, data : LineData)
         if (worker.chosenAction == CitizenAction.Build)
             element.classList.add("under-construction");
     }
+
+    if (data.coords === selectedThing)
+        element.classList.add("selected");
 }
 
 function setCornerGfx( element : Element, data : CornerData)
@@ -284,12 +288,13 @@ function setCornerGfx( element : Element, data : CornerData)
             hexmap.mapHtml.appendChild(arrow);
             tempElements.push(arrow);
         }
-    } else
+    } 
+    else 
+    {
         element.removeAttribute("fill");
-}
-
-function onSelectHex( hex: Hex) {
-    hexmap.tileElements[hexKey(hex.q, hex.r)].classList.add("selected");
+        if (data.coords === selectedThing)
+            element.classList.add("selected");
+    }
 }
 
 function onHexHovered(hex: Hex) {
@@ -381,8 +386,8 @@ function onCornerHovered(corner: Corner) {
 }
 
 function onHexClicked(hex: Hex) { 
-    selectedTile = [ hex.q ,hex.r];
-    hexmap.selectHex(hex.q,hex.r);
+    selectedThing = hex;
+    hexmap.refreshGfx();
 
     game.selectedTypeElement.textContent = "Type: Hex" 
     game.slectedPositionElement.textContent = "Position: " + hex.q + "," + hex.r + ",";
@@ -407,6 +412,9 @@ function onHexClicked(hex: Hex) {
 }
 
 function onLineClicked( line : Line) {
+    selectedThing = line;
+    hexmap.refreshGfx();
+
     let data = hexmap.lines[lineKey(line.q, line.r, line.dir)];
     game.selectedTypeElement.textContent = "Type: Edge" 
     game.slectedPositionElement.textContent = "Position: " + line.q + "," + line.r + "," + line.dir;
@@ -429,6 +437,9 @@ function onLineClicked( line : Line) {
 };
 
 function onCornerClicked( corner :Corner) {
+    selectedThing = corner;
+    hexmap.refreshGfx();
+
     game.selectedTypeElement.textContent = "Type: Point" 
     game.slectedPositionElement.textContent = "Position: " + corner.q + "," + corner.r + "," + corner.dir;
     game.selectedHeightElement.textContent = "Height: "     + hexmap.corners[cornerKey(corner.q,corner.r,corner.dir)].height;
@@ -759,15 +770,6 @@ class HexMap
     isHexInMap( q:number, r:number) : boolean
     {
         return ((Math.abs(q) + Math.abs(r) + Math.abs(-q-r)) / 2) <= this.mapRadius; //hex.len() <= this.mapRadius;
-    }
-
-    unselectHex() {
-        this.mapHtml.querySelectorAll(".selected").forEach( e => e.classList.remove("selected"));
-    }
-
-    selectHex( q:number, r:number) {
-        this.unselectHex();
-        this.tileElements[hexKey(q,r)].classList.add("selected");
     }
 
     setCamera( q:number, y:number, scale:number)

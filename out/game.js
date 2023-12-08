@@ -482,6 +482,7 @@ function getToxicityLevel(toxicity) {
     return toxicityThresholds.length;
 }
 // UI state
+let debugHexes = false;
 var Lens;
 (function (Lens) {
     Lens[Lens["None"] = 0] = "None";
@@ -504,7 +505,6 @@ function removeLens() {
     hexmap.refreshGfx();
     hexmap.removeTextFromAllElements();
 }
-let debugHexes = false;
 class ChangeActionFlow {
     constructor(action) {
         this.dude = null;
@@ -532,7 +532,7 @@ function confirmAction() {
         hexmap.refreshGfx();
     }
 }
-let selectedTile = [0, 0]; // Need to remember selected tile
+let selectedThing = null;
 let tempElements = [];
 function clearTempElements() {
     tempElements.forEach(e => e.remove());
@@ -565,6 +565,8 @@ function setTileGfx(element, tile) {
             if (worker.chosenAction == CitizenAction.Build)
                 element.classList.add("under-construction");
         }
+        if (tile.coords === selectedThing)
+            element.classList.add("selected");
     }
     else {
         switch (lens) {
@@ -604,6 +606,8 @@ function setLineGfx(element, data) {
         if (worker.chosenAction == CitizenAction.Build)
             element.classList.add("under-construction");
     }
+    if (data.coords === selectedThing)
+        element.classList.add("selected");
 }
 function setCornerGfx(element, data) {
     switch (data.building) {
@@ -665,11 +669,11 @@ function setCornerGfx(element, data) {
             tempElements.push(arrow);
         }
     }
-    else
+    else {
         element.removeAttribute("fill");
-}
-function onSelectHex(hex) {
-    hexmap.tileElements[hexKey(hex.q, hex.r)].classList.add("selected");
+        if (data.coords === selectedThing)
+            element.classList.add("selected");
+    }
 }
 function onHexHovered(hex) {
     clearTempElements();
@@ -746,8 +750,8 @@ function onCornerHovered(corner) {
     hexmap.cornerElements[cornerKey(corner.q, corner.r, corner.dir)].classList.add("hover");
 }
 function onHexClicked(hex) {
-    selectedTile = [hex.q, hex.r];
-    hexmap.selectHex(hex.q, hex.r);
+    selectedThing = hex;
+    hexmap.refreshGfx();
     game.selectedTypeElement.textContent = "Type: Hex";
     game.slectedPositionElement.textContent = "Position: " + hex.q + "," + hex.r + ",";
     //game.selectedHeightElement.textContent = "Height: "     + hexmap.tiles[hexKey(hex.q,hex.r)].height;
@@ -768,6 +772,8 @@ function onHexClicked(hex) {
     }
 }
 function onLineClicked(line) {
+    selectedThing = line;
+    hexmap.refreshGfx();
     let data = hexmap.lines[lineKey(line.q, line.r, line.dir)];
     game.selectedTypeElement.textContent = "Type: Edge";
     game.slectedPositionElement.textContent = "Position: " + line.q + "," + line.r + "," + line.dir;
@@ -788,6 +794,8 @@ function onLineClicked(line) {
 }
 ;
 function onCornerClicked(corner) {
+    selectedThing = corner;
+    hexmap.refreshGfx();
     game.selectedTypeElement.textContent = "Type: Point";
     game.slectedPositionElement.textContent = "Position: " + corner.q + "," + corner.r + "," + corner.dir;
     game.selectedHeightElement.textContent = "Height: " + hexmap.corners[cornerKey(corner.q, corner.r, corner.dir)].height;
@@ -1065,13 +1073,6 @@ class HexMap {
     }
     isHexInMap(q, r) {
         return ((Math.abs(q) + Math.abs(r) + Math.abs(-q - r)) / 2) <= this.mapRadius; //hex.len() <= this.mapRadius;
-    }
-    unselectHex() {
-        this.mapHtml.querySelectorAll(".selected").forEach(e => e.classList.remove("selected"));
-    }
-    selectHex(q, r) {
-        this.unselectHex();
-        this.tileElements[hexKey(q, r)].classList.add("selected");
     }
     setCamera(q, y, scale) {
         this.mapHtml.setAttribute("transform", `translate(${q},${y}) scale(${scale})`);
