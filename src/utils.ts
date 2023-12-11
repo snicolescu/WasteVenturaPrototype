@@ -16,10 +16,26 @@ function clamp(n: number, min: number, max: number) {
     return Math.max(min, Math.min(max, n));
 }
 
+function lerp(a: number, b: number, t: number) {
+    return a + (b - a) * t;
+}
+
 // returns a random integer in the range [min, max]
 function randInt(min: number, max: number) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
 }
+
+function randIntSeeded(min: number, max: number, t: number) {
+    return Math.floor(t * (max - min + 1)) + min;
+}
+
+// returns a random number in [0, 1) based on x and y
+function psRandUnit(x : number, y : number)
+{
+    let n = (Math.sin( x * 12.9898 + y * 78.233) * 43758.5453);
+    return n - Math.floor(n);
+} 
+
 
 function getRandomElement<Type>(dictionary: { [key: number]: Type; } ) : Type
 {
@@ -123,12 +139,20 @@ function createRectangleElement( width: number, height: number) {
 }
 
 function addDropdownChild( parent: Element, label: string, callback: () => void) {
-    let dropdownItem1 = document.createElement("a");
-    dropdownItem1.classList.add("dropdown-item");
-    dropdownItem1.href = "#";
-    dropdownItem1.textContent = label;
-    dropdownItem1.onclick = callback;
-    parent.appendChild(dropdownItem1);
+    let element = document.createElement("a");
+    element.classList.add("dropdown-item");
+    element.href = "#";
+    element.textContent = label;
+    element.onclick = callback;
+    parent.appendChild(element);
+}
+
+function addButtonChild( parent: Element, label: string, callback: () => void) {
+    let element = document.createElement("button");
+    element.classList.add("btn", "btn-secondary");
+    element.textContent = label;
+    element.onclick = callback;
+    parent.appendChild(element);
 }
 
 // Hex, Line & Point helpers
@@ -237,7 +261,7 @@ function getLineBetweenCorners( c1 : Corner, c2 : Corner) : Line {
     if (c2.dir == 0) {
         let c = c1;
         c1 = c2;
-        c2 = c;        
+        c2 = c;
     }
     return new Line( c1.q, c2.r, c1.q - c2.q + c2.r - c1.r);
 }

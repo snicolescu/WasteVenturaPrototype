@@ -197,9 +197,20 @@ function rgbToHexa(r, g, b) {
 function clamp(n, min, max) {
     return Math.max(min, Math.min(max, n));
 }
+function lerp(a, b, t) {
+    return a + (b - a) * t;
+}
 // returns a random integer in the range [min, max]
 function randInt(min, max) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+function randIntSeeded(min, max, t) {
+    return Math.floor(t * (max - min + 1)) + min;
+}
+// returns a random number in [0, 1) based on x and y
+function psRandUnit(x, y) {
+    let n = (Math.sin(x * 12.9898 + y * 78.233) * 43758.5453);
+    return n - Math.floor(n);
 }
 function getRandomElement(dictionary) {
     let keys = Object.keys(dictionary);
@@ -286,12 +297,19 @@ function createRectangleElement(width, height) {
     return element;
 }
 function addDropdownChild(parent, label, callback) {
-    let dropdownItem1 = document.createElement("a");
-    dropdownItem1.classList.add("dropdown-item");
-    dropdownItem1.href = "#";
-    dropdownItem1.textContent = label;
-    dropdownItem1.onclick = callback;
-    parent.appendChild(dropdownItem1);
+    let element = document.createElement("a");
+    element.classList.add("dropdown-item");
+    element.href = "#";
+    element.textContent = label;
+    element.onclick = callback;
+    parent.appendChild(element);
+}
+function addButtonChild(parent, label, callback) {
+    let element = document.createElement("button");
+    element.classList.add("btn", "btn-secondary");
+    element.textContent = label;
+    element.onclick = callback;
+    parent.appendChild(element);
 }
 // Hex, Line & Point helpers
 function Pt(x, y) { return new Point(x, y); }
@@ -423,13 +441,9 @@ TODO:
     merge hexmap into game class
     click lenses to have them stay on
     show citizens on worked tiles
+    show squiggles from waste tiles toward clean neighbors
 
     merge all gfx from onHovered into refreshGfx
-    action cleanup
-        show build in progress
-        add dropdown for choosing citizen
-        cancel button
-        prevent selecting other tile
     polluted/clean water
         water sources are polluted, pipe it to waste treatment to clean it
         pump clean water out
@@ -515,6 +529,11 @@ class ChangeActionFlow {
     }
 }
 let currentAction = null;
+function setAction(action) {
+    assert(currentAction == null, "Trying to set action while another is active");
+    currentAction = action;
+    citizensList.refreshGfx();
+}
 function confirmAction() {
     if (currentAction != null) {
         //TODO: Handle cancelling previous activity here
@@ -530,6 +549,13 @@ function confirmAction() {
         citizensList.refreshWorked();
         citizensList.refreshGfx();
         hexmap.refreshGfx();
+    }
+}
+function cancelAction() {
+    if (currentAction != null) {
+        currentAction = null;
+        hexmap.refreshGfx();
+        citizensList.refreshGfx();
     }
 }
 let selectedThing = null;
@@ -553,10 +579,11 @@ function setTileGfx(element, tile) {
             if (tile.water)
                 element.classList.add("water3");
             else {
+                let tileSeed = psRandUnit(tile.coords.q, tile.coords.r);
                 if (tile.humidity > 0)
-                    element.classList.add("land" + randInt(1, 3));
+                    element.classList.add("land" + randIntSeeded(1, 3, tileSeed));
                 else
-                    element.classList.add("land-dry" + randInt(1, 3));
+                    element.classList.add("land-dry" + randIntSeeded(1, 3, tileSeed));
             }
         }
         // buildings
@@ -751,28 +778,32 @@ function onCornerHovered(corner) {
 }
 function onHexClicked(hex) {
     selectedThing = hex;
+    cancelAction();
     hexmap.refreshGfx();
+    let data = hexmap.tiles[hexKey(hex.q, hex.r)];
     game.selectedTypeElement.textContent = "Type: Hex";
     game.slectedPositionElement.textContent = "Position: " + hex.q + "," + hex.r + ",";
-    //game.selectedHeightElement.textContent = "Height: "     + hexmap.tiles[hexKey(hex.q,hex.r)].height;
+    game.selectedHeightElement.textContent = "Built: " + data.building.toString();
     game.selectedWaterElement.textContent = "Is Water source: " + hexmap.tiles[hexKey(hex.q, hex.r)].water;
     game.selectedHumidityElement.textContent = "Humidity: " + hexmap.tiles[hexKey(hex.q, hex.r)].humidity;
-    let tox = hexmap.tiles[hexKey(hex.q, hex.r)].toxicity;
-    game.selectedToxicityElement.textContent = "Toxicity: " + getToxicityLevel(tox) + " (" + tox + ")";
+    game.selectedToxicityElement.textContent = "Toxicity: " + getToxicityLevel(data.toxicity) + " (" + data.toxicity + ")";
     game.actionMenuElement.classList.remove("hidden");
     while (game.actionMenuElement.firstChild) {
         game.actionMenuElement.removeChild(game.actionMenuElement.firstChild);
     }
-    if (hexmap.tiles[hexKey(hex.q, hex.r)].toxicity > 0) {
-        addDropdownChild(game.actionMenuElement, "Clear Toxicity", () => {
-            currentAction = new ChangeActionFlow(CitizenAction.ClearToxicity);
-            currentAction.target = hex;
-            citizensList.refreshGfx();
+    if (data.toxicity > 0) {
+        addButtonChild(game.actionMenuElement, "Clear Toxicity", () => {
+            let newAction = new ChangeActionFlow(CitizenAction.ClearToxicity);
+            newAction.target = hex;
+            setAction(newAction);
         });
     }
+    if (data.building != TileBuilding.Empty)
+        return;
 }
 function onLineClicked(line) {
     selectedThing = line;
+    cancelAction();
     hexmap.refreshGfx();
     let data = hexmap.lines[lineKey(line.q, line.r, line.dir)];
     game.selectedTypeElement.textContent = "Type: Edge";
@@ -785,32 +816,38 @@ function onLineClicked(line) {
     while (game.actionMenuElement.firstChild) {
         game.actionMenuElement.removeChild(game.actionMenuElement.firstChild);
     }
-    addDropdownChild(game.actionMenuElement, "Build Waterway", () => {
-        currentAction = new ChangeActionFlow(CitizenAction.Build);
-        currentAction.target = line;
-        currentAction.info = LineBuilding.Waterway;
-        citizensList.refreshGfx();
+    if (data.building != LineBuilding.Empty)
+        return;
+    addButtonChild(game.actionMenuElement, "Build Waterway", () => {
+        let newAction = new ChangeActionFlow(CitizenAction.Build);
+        newAction.target = line;
+        newAction.info = LineBuilding.Waterway;
+        setAction(newAction);
     });
 }
 ;
 function onCornerClicked(corner) {
     selectedThing = corner;
+    cancelAction();
     hexmap.refreshGfx();
+    let data = hexmap.corners[cornerKey(corner.q, corner.r, corner.dir)];
     game.selectedTypeElement.textContent = "Type: Point";
     game.slectedPositionElement.textContent = "Position: " + corner.q + "," + corner.r + "," + corner.dir;
     game.selectedHeightElement.textContent = "Height: " + hexmap.corners[cornerKey(corner.q, corner.r, corner.dir)].height;
-    game.selectedWaterElement.textContent = "";
+    game.selectedWaterElement.textContent = "Built: " + data.building.toString();
     game.selectedHumidityElement.textContent = "";
     game.selectedToxicityElement.textContent = "";
     game.actionMenuElement.classList.remove("hidden");
     while (game.actionMenuElement.firstChild) {
         game.actionMenuElement.removeChild(game.actionMenuElement.firstChild);
     }
-    addDropdownChild(game.actionMenuElement, "Build Pump", () => {
-        currentAction = new ChangeActionFlow(CitizenAction.Build);
-        currentAction.target = corner;
-        currentAction.info = CornerBuilding.Pump;
-        citizensList.refreshGfx();
+    if (data.building != CornerBuilding.Empty)
+        return;
+    addButtonChild(game.actionMenuElement, "Build Pump", () => {
+        let newAction = new ChangeActionFlow(CitizenAction.Build);
+        newAction.target = corner;
+        newAction.info = CornerBuilding.Pump;
+        setAction(newAction);
     });
 }
 ;
@@ -1217,6 +1254,18 @@ class CitizensList {
     }
     refreshGfx() {
         //TODO: Don't rebuild every frame
+        let civButtons = null;
+        if (currentAction != null) {
+            // make visible
+            game.chooseIdleCivilianElement.classList.remove("hidden");
+            civButtons = game.chooseIdleCivilianElement.firstElementChild;
+            while (civButtons.firstChild) {
+                civButtons.removeChild(civButtons.firstChild);
+            }
+        }
+        else {
+            game.chooseIdleCivilianElement.classList.add("hidden");
+        }
         // clearTable
         for (let i = 0; i < this.citizens.length; i++) {
             this.table.deleteRow(-1);
@@ -1230,16 +1279,21 @@ class CitizensList {
             let cell3 = row.insertCell(2);
             cell1.innerHTML = citizen.name;
             cell2.innerHTML = CitizenAction[citizen.chosenAction].toString();
-            if (currentAction != null) {
-                let actionButton = document.createElement("button");
-                actionButton.type = "button";
-                actionButton.classList.add("btn", "btn-primary", "btn-sm");
-                actionButton.textContent = "Pick Me !";
-                actionButton.onclick = () => { currentAction.dude = citizen; confirmAction(); };
-                cell3.appendChild(actionButton);
-            }
-            else
-                cell3.innerHTML = "Alive"; // status used to go here
+            cell3.innerHTML = "Alive"; // status used to go here
+            if (citizen.chosenAction == CitizenAction.Idle && civButtons != null)
+                addButtonChild(civButtons, citizen.name, () => {
+                    currentAction.dude = citizen;
+                    confirmAction();
+                });
+            //if (currentAction != null) {
+            //    let actionButton = document.createElement("button");
+            //    actionButton.type = "button";
+            //    actionButton.classList.add("btn", "btn-primary", "btn-sm");
+            //    actionButton.textContent = "Pick Me !"
+            //    actionButton.onclick = () => {  currentAction.dude = citizen; confirmAction(); };
+            //    cell3.appendChild(actionButton);
+            //}
+            //else
             row.onmouseenter = () => {
                 if (citizen.assignedHex != null)
                     onHexHovered(citizen.assignedHex);
@@ -1257,6 +1311,7 @@ class CitizensList {
                     hexmap.cornerElements[cornerKey(citizen.assignedCorner.q, citizen.assignedCorner.r, citizen.assignedCorner.dir)].classList.remove("hover");
             };
         }
+        // pick civ list
     }
 }
 class Resources {
@@ -1353,6 +1408,7 @@ class Game {
         this.selectedHumidityElement = document.getElementById("selected_humidity");
         this.selectedToxicityElement = document.getElementById("selected_toxicity");
         this.actionMenuElement = document.getElementById("action_menu");
+        this.chooseIdleCivilianElement = document.getElementById("choose_civ_bar");
         document.getElementById("restart").onclick = () => { this.resetState(); };
         document.getElementById("savegame").onclick = () => { this.saveState(); };
         document.getElementById("loadgame").onclick = () => { this.loadState(); };
